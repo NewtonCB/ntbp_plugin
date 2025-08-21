@@ -199,10 +199,10 @@ await plugin.printSingleLabelWithGapDetection(
 
 ## 📚 Documentation
 
-- [Full Documentation](https://github.com/yourusername/ntbp_plugin/tree/main/docs)
-- [API Reference](https://github.com/yourusername/ntbp_plugin/blob/main/docs/API_REFERENCE.md)
-- [Integration Guide](https://github.com/yourusername/ntbp_plugin/blob/main/docs/INTEGRATION_GUIDE.md)
-- [UI Implementation Guide](https://github.com/yourusername/ntbp_plugin/blob/main/docs/UI_IMPLEMENTATION_GUIDE.md)
+- [Full Documentation](https://github.com/NewtonCB/ntbp_plugin/tree/main/doc)
+- [API Reference](https://github.com/NewtonCB/ntbp_plugin/blob/main/doc/API_REFERENCE.md)
+- [Integration Guide](https://github.com/NewtonCB/ntbp_plugin/blob/main/doc/INTEGRATION_GUIDE.md)
+- [UI Implementation Guide](https://github.com/NewtonCB/ntbp_plugin/blob/main/doc/UI_IMPLEMENTATION_GUIDE.md)
 
 ## 🔧 Requirements
 
