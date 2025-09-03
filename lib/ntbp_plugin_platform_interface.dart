@@ -280,7 +280,9 @@ abstract class NtbpPluginPlatform extends PlatformInterface {
   /// Print single label with gap detection and proper positioning
   Future<bool> printSingleLabelWithGapDetection({
     required String qrData,
-    required String textData,
+    required String textData1, // Customer name
+    required String textData2, // Drop point
+    required String textData3, // Additional info
     required double width,
     required double height,
     String? unit,
@@ -302,6 +304,21 @@ abstract class NtbpPluginPlatform extends PlatformInterface {
     int? textSize,
   }) {
     throw UnimplementedError('printMultipleLabelsWithGapDetection() has not been implemented.');
+  }
+
+  /// Send protocol commands to printer (for protocol system)
+  Future<bool> sendProtocolCommands(List<int> commands, String protocolName) {
+    throw UnimplementedError('sendProtocolCommands() has not been implemented.');
+  }
+
+  /// Initialize printer with protocol-specific settings
+  Future<bool> initializeProtocolPrinter(String printerModel, double labelWidth, double labelHeight, String unit, int dpi) {
+    throw UnimplementedError('initializeProtocolPrinter() has not been implemented.');
+  }
+
+  /// Print using protocol system
+  Future<bool> printWithProtocol(String protocolName, Map<String, dynamic> printData) {
+    throw UnimplementedError('printWithProtocol() has not been implemented.');
   }
 
 

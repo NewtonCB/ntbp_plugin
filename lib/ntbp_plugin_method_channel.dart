@@ -106,26 +106,33 @@ class MethodChannelNtbpPlugin extends NtbpPluginPlatform {
 
   @override
   Future<bool> print(List<PrintCommand> commands) async {
-    final commandsList = commands.map((cmd) => cmd.toMap()).toList();
-    final result = await methodChannel.invokeMethod<bool>('print', commandsList);
+    final result = await methodChannel.invokeMethod<bool>('print', {
+      'commands': commands.map((cmd) => cmd.toMap()).toList(),
+    });
     return result ?? false;
   }
 
   @override
   Future<bool> printText(String text) async {
-    final result = await methodChannel.invokeMethod<bool>('printText', text);
+    final result = await methodChannel.invokeMethod<bool>('printText', {
+      'text': text,
+    });
     return result ?? false;
   }
 
   @override
   Future<bool> printBarcode(String data) async {
-    final result = await methodChannel.invokeMethod<bool>('printBarcode', data);
+    final result = await methodChannel.invokeMethod<bool>('printBarcode', {
+      'data': data,
+    });
     return result ?? false;
   }
 
   @override
   Future<bool> printQRCode(String data) async {
-    final result = await methodChannel.invokeMethod<bool>('printQRCode', data);
+    final result = await methodChannel.invokeMethod<bool>('printQRCode', {
+      'data': data,
+    });
     return result ?? false;
   }
 
@@ -258,12 +265,6 @@ class MethodChannelNtbpPlugin extends NtbpPluginPlatform {
   }
 
   @override
-  Future<Map<String, dynamic>> getPrinterStatus() async {
-    final result = await methodChannel.invokeMethod<Map<String, dynamic>>('getPrinterStatus');
-    return result ?? <String, dynamic>{};
-  }
-
-  @override
   Future<bool> printBarcodeWithText(
     String barcodeData,
     String textData, {
@@ -287,13 +288,13 @@ class MethodChannelNtbpPlugin extends NtbpPluginPlatform {
 
   @override
   Future<bool> printSmartLabel(Map<String, dynamic> labelData) async {
-    final result = await methodChannel.invokeMethod('printSmartLabel', labelData);
+    final result = await methodChannel.invokeMethod<bool>('printSmartLabel', labelData);
     return result ?? false;
   }
 
   @override
   Future<bool> printSmartSequence(List<Map<String, dynamic>> labelDataList) async {
-    final result = await methodChannel.invokeMethod('printSmartSequence', {
+    final result = await methodChannel.invokeMethod<bool>('printSmartSequence', {
       'labelDataList': labelDataList,
     });
     return result ?? false;
@@ -315,10 +316,10 @@ class MethodChannelNtbpPlugin extends NtbpPluginPlatform {
       'textData': textData,
       'labelWidth': labelWidth,
       'labelHeight': labelHeight,
-      'labelUnit': labelUnit ?? 'mm',
-      'dpi': dpi ?? 203,
-      'copies': copies ?? 1,
-      'speedMode': speedMode ?? 'normal',
+      'labelUnit': labelUnit,
+      'dpi': dpi,
+      'copies': copies,
+      'speedMode': speedMode,
     });
     return result ?? false;
   }
@@ -342,18 +343,6 @@ class MethodChannelNtbpPlugin extends NtbpPluginPlatform {
   }
 
   @override
-  Future<String> getConnectionStatus() async {
-    final result = await methodChannel.invokeMethod<String>('getConnectionStatus');
-    return result ?? 'UNKNOWN';
-  }
-
-  @override
-  Future<Map<String, dynamic>> getDetailedConnectionStatus() async {
-    final result = await methodChannel.invokeMethod<Map<String, dynamic>>('getDetailedConnectionStatus');
-    return result ?? {};
-  }
-
-  @override
   Future<bool> printCustomLabel({
     required String qrData,
     required String textData,
@@ -369,8 +358,8 @@ class MethodChannelNtbpPlugin extends NtbpPluginPlatform {
       'textData': textData,
       'width': width,
       'height': height,
-      'unit': unit ?? 'mm',
-      'dpi': dpi ?? 203,
+      'unit': unit,
+      'dpi': dpi,
       'qrSize': qrSize,
       'textSize': textSize,
     });
@@ -378,21 +367,17 @@ class MethodChannelNtbpPlugin extends NtbpPluginPlatform {
   }
 
   @override
-  Future<bool> clearBuffer() async {
-    final result = await methodChannel.invokeMethod<bool>('clearBuffer');
-    return result ?? false;
-  }
-
-  @override
   Future<bool> feedPaper(int lines) async {
-    final result = await methodChannel.invokeMethod('feedPaper', {'lines': lines});
+    final result = await methodChannel.invokeMethod<bool>('feedPaper', {'lines': lines});
     return result ?? false;
   }
 
   @override
   Future<bool> printSingleLabelWithGapDetection({
     required String qrData,
-    required String textData,
+    required String textData1, // Customer name
+    required String textData2, // Drop point
+    required String textData3, // Additional info
     required double width,
     required double height,
     String? unit,
@@ -402,13 +387,15 @@ class MethodChannelNtbpPlugin extends NtbpPluginPlatform {
   }) async {
     final result = await methodChannel.invokeMethod<bool>('printSingleLabelWithGapDetection', {
       'qrData': qrData,
-      'textData': textData,
+      'textData1': textData1,
+      'textData2': textData2,
+      'textData3': textData3,
       'width': width,
       'height': height,
-      'unit': unit ?? 'mm',
-      'dpi': dpi ?? 203,
-      'copies': copies ?? 1,
-      'textSize': textSize ?? 9,
+      'unit': unit,
+      'dpi': dpi,
+      'copies': copies,
+      'textSize': textSize,
     });
     return result ?? false;
   }
@@ -427,10 +414,65 @@ class MethodChannelNtbpPlugin extends NtbpPluginPlatform {
       'labelDataList': labelDataList,
       'width': width,
       'height': height,
-      'unit': unit ?? 'mm',
-      'dpi': dpi ?? 203,
-      'copiesPerLabel': copiesPerLabel ?? 1,
-      'textSize': textSize ?? 10,
+      'unit': unit,
+      'dpi': dpi,
+      'copiesPerLabel': copiesPerLabel,
+      'textSize': textSize,
+    });
+    return result ?? false;
+  }
+
+  @override
+  Future<bool> clearBuffer() async {
+    final result = await methodChannel.invokeMethod<bool>('clearBuffer');
+    return result ?? false;
+  }
+
+  @override
+  Future<Map<String, dynamic>> getPrinterStatus() async {
+    final result = await methodChannel.invokeMethod<Map<String, dynamic>>('getPrinterStatus');
+    return result ?? {};
+  }
+
+  @override
+  Future<String> getConnectionStatus() async {
+    final result = await methodChannel.invokeMethod<String>('getConnectionStatus');
+    return result ?? 'UNKNOWN';
+  }
+
+  @override
+  Future<Map<String, dynamic>> getDetailedConnectionStatus() async {
+    final result = await methodChannel.invokeMethod<Map<String, dynamic>>('getDetailedConnectionStatus');
+    return result ?? {};
+  }
+
+  // NEW: Protocol system methods that connect to native code
+  @override
+  Future<bool> sendProtocolCommands(List<int> commands, String protocolName) async {
+    final result = await methodChannel.invokeMethod<bool>('sendProtocolCommands', {
+      'commands': commands,
+      'protocolName': protocolName,
+    });
+    return result ?? false;
+  }
+
+  @override
+  Future<bool> initializeProtocolPrinter(String printerModel, double labelWidth, double labelHeight, String unit, int dpi) async {
+    final result = await methodChannel.invokeMethod<bool>('initializeProtocolPrinter', {
+      'printerModel': printerModel,
+      'labelWidth': labelWidth,
+      'labelHeight': labelHeight,
+      'unit': unit,
+      'dpi': dpi,
+    });
+    return result ?? false;
+  }
+
+  @override
+  Future<bool> printWithProtocol(String protocolName, Map<String, dynamic> printData) async {
+    final result = await methodChannel.invokeMethod<bool>('printWithProtocol', {
+      'protocolName': protocolName,
+      'printData': printData,
     });
     return result ?? false;
   }

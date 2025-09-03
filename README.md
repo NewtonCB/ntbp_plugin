@@ -3,7 +3,7 @@
 [![Flutter](https://img.shields.io/badge/Flutter-3.19+-blue.svg)](https://flutter.dev)
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20iOS-green.svg)](https://flutter.dev/docs/development/platform-integration)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-1.0.0-orange.svg)](https://pub.dev/packages/ntbp_plugin)
+[![Version](https://img.shields.io/badge/Version-2.0.0-orange.svg)](https://pub.dev/packages/ntbp_plugin)
 
 A comprehensive, production-ready Flutter plugin for thermal Bluetooth label printing with advanced features including gap detection, precise positioning, and support for multiple label formats. **Works with any UI implementation** - the plugin handles all the complexity behind the scenes.
 
@@ -15,1132 +15,349 @@ A comprehensive, production-ready Flutter plugin for thermal Bluetooth label pri
 - **🛡️ Robust**: Advanced error handling and buffer management
 - **📚 Well-Documented**: Comprehensive guides and examples
 - **🔧 Maintainable**: Clean architecture and extensible design
+- **🎨 Perfect Positioning**: Professional-quality label layout with precise text alignment
 
 ## 🚀 **Core Features**
 
-- **Bluetooth Connectivity**: Support for both Classic Bluetooth (SPP) and BLE
-- **Thermal Printing**: TSPL language support for professional label printing
-- **Smart Positioning**: Automatic content centering based on label dimensions
+### **Label Printing**
+- **Three-Line Text Support**: Customer name, position, and additional info with perfect alignment
+- **QR Code Integration**: High-quality QR codes with optimal sizing and positioning
+- **Smart Positioning**: Automatic content centering and perfect text alignment
 - **Gap Detection**: Intelligent label boundary detection and frame management
 - **Multiple Formats**: QR codes, barcodes, text, and combined content printing
 - **Batch Processing**: Sequence printing with proper label separation
-- **Buffer Management**: Advanced buffer clearing strategies for reliable printing
+
+### **Bluetooth Connectivity**
+- **Device Discovery**: Automatic Bluetooth device scanning and pairing
+- **Connection Management**: Robust connection handling with retry logic
+- **Protocol Support**: TSPL and ESC/POS compatibility
 - **Cross-Platform**: Android and iOS support with identical APIs
+
+### **Advanced Features**
+- **Buffer Management**: Advanced buffer clearing strategies for reliable printing
+- **Error Handling**: Comprehensive error handling and recovery
+- **Scalable Architecture**: Easy to extend for new printer types
+- **Performance Optimized**: Efficient printing with minimal resource usage
 
 ## 📱 **Supported Printers**
 
 - **TSPL-Compatible Printers**: N41, N42, and similar thermal label printers
+- **ESC/POS Printers**: Romeson KT58L and similar models (with TSPL forced)
 - **Resolution**: 203 DPI (8 dots/mm) and higher
 - **Label Sizes**: 2" (50mm) to 4.65" (118mm) width
 - **Media Types**: Die-cut labels, continuous paper, black mark paper
 
-## 🏗️ **Architecture Overview**
+## 📦 **Installation**
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Flutter App                             │
-│              (Any UI Framework)                            │
-├─────────────────────────────────────────────────────────────┤
-│                 ntbp_plugin.dart                           │
-│              (Public API Interface)                        │
-├─────────────────────────────────────────────────────────────┤
-│           ntbp_plugin_platform_interface.dart              │
-│              (Abstract Platform Interface)                 │
-├─────────────────────────────────────────────────────────────┤
-│           ntbp_plugin_method_channel.dart                  │
-│              (Flutter Method Channel)                     │
-├─────────────────────────────────────────────────────────────┤
-│                    Native Implementation                    │
-│  ┌─────────────────┐    ┌─────────────────┐               │
-│  │   Android       │    │      iOS        │               │
-│  │   (Kotlin)      │    │   (Swift)       │               │
-│  │                 │    │                 │               │
-│  │ • Bluetooth     │    │ • CoreBluetooth │               │
-│  │ • TSPL Commands │    │ • TSPL Commands │               │
-│  │ • Buffer Mgmt   │    │ • Buffer Mgmt   │               │
-│  └─────────────────┘    └─────────────────┘               │
-└─────────────────────────────────────────────────────────────┘
+Add this to your package's `pubspec.yaml` file:
+
+```yaml
+dependencies:
+  ntbp_plugin: ^2.0.0
 ```
 
-## 📋 **Table of Contents**
+Then run:
 
-1. [Quick Start](#quick-start)
-2. [Installation](#installation)
-3. [Basic Usage](#basic-usage)
-4. [Advanced Features](#advanced-features)
-5. [API Reference](#api-reference)
-6. [Integration Guide](#integration-guide)
-7. [UI Implementation Examples](#ui-implementation-examples)
-8. [Troubleshooting](#troubleshooting)
-9. [Development Guide](#development-guide)
-10. [Contributing](#contributing)
+```bash
+flutter pub get
+```
 
 ## 🚀 **Quick Start**
 
-### **1. Add Dependency**
-
-```yaml
-dependencies:
-  ntbp_plugin: ^1.0.0
-```
-
-### **2. Basic Implementation (UI-Agnostic)**
+### **1. Basic Setup**
 
 ```dart
 import 'package:ntbp_plugin/ntbp_plugin.dart';
 
-class PrinterService {
-  final NtbpPlugin _plugin = NtbpPlugin();
-  
-  Future<void> printLabel() async {
-    try {
-      // Initialize plugin
-      final isAvailable = await _plugin.isBluetoothAvailable();
-      if (!isAvailable) {
-        throw Exception('Bluetooth not available');
-      }
-      
-      // Check permissions
-      final hasPermission = await _plugin.requestBluetoothPermissions();
-      if (!hasPermission) {
-        throw Exception('Bluetooth permission denied');
-      }
-      
-      // Scan for devices
-      final devices = await _plugin.startScan();
-      if (devices.isEmpty) {
-        throw Exception('No devices found');
-      }
-      
-      // Connect to device
-      await _plugin.connectToDevice(devices.first);
-      
-      // Print single label
-      final success = await _plugin.printSingleLabelWithGapDetection(
-        qrData: "QR123456",
-        textData: "Sample Label",
-        width: 75.0,
-        height: 50.0,
-        unit: 'mm',
-        dpi: 203,
-        copies: 1,
-        textSize: 9,
-      );
-      
-      if (success) {
-        print('Label printed successfully!');
-      }
-    } catch (e) {
-      print('Error: $e');
-    }
-  }
-}
+// Initialize the plugin
+await NtbpPlugin.initialize();
 ```
 
-### **3. Advanced Usage - Multiple Labels**
+### **2. Discover and Connect to Printer**
 
 ```dart
-Future<void> printMultipleLabels() async {
-  final labelData = [
-    {'qrData': 'QR001', 'textData': 'Product A'},
-    {'qrData': 'QR002', 'textData': 'Product B'},
-    {'qrData': 'QR003', 'textData': 'Product C'},
-  ];
-  
-  final success = await _plugin.printMultipleLabelsWithGapDetection(
-    labelDataList: labelData,
-    width: 75.0,
-    height: 50.0,
-    unit: 'mm',
-    dpi: 203,
-    copiesPerLabel: 1,
-    textSize: 9,
-  );
-  
-  if (success) {
-    print('All labels printed successfully!');
-  }
-}
+// Start Bluetooth discovery
+await NtbpPlugin.startScan();
+
+// Get discovered devices
+List<BluetoothDevice> devices = await NtbpPlugin.getDiscoveredDevices();
+
+// Connect to a device
+bool connected = await NtbpPlugin.connectToDevice(devices.first);
 ```
 
-## 📦 **Installation**
-
-### **Flutter Dependencies**
-
-```yaml
-dependencies:
-  flutter:
-    sdk: flutter
-  ntbp_plugin: ^1.0.0
-```
-
-### **Android Configuration**
-
-Add to `android/app/src/main/AndroidManifest.xml`:
-
-```xml
-<uses-permission android:name="android.permission.BLUETOOTH" />
-<uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
-<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-<uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
-<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-```
-
-### **iOS Configuration**
-
-Add to `ios/Runner/Info.plist`:
-
-```xml
-<key>NSBluetoothAlwaysUsageDescription</key>
-<string>This app uses Bluetooth to connect to thermal printers for label printing.</string>
-<key>NSBluetoothPeripheralUsageDescription</key>
-<string>This app uses Bluetooth to connect to thermal printers for label printing.</string>
-```
-
-Create `ios/Runner/PrivacyInfo.xcprivacy`:
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>NSPrivacyAccessedAPITypes</key>
-    <array>
-        <dict>
-            <key>NSPrivacyAccessedAPIType</key>
-            <string>NSPrivacyAccessedAPICategoryBluetooth</string>
-            <key>NSPrivacyAccessedAPITypeReasons</key>
-            <array>
-                <string>This app uses Bluetooth to connect to thermal printers for label printing functionality.</string>
-            </array>
-        </dict>
-    </array>
-</dict>
-</plist>
-```
-
-## 🎨 **UI Implementation Examples**
-
-### **Example 1: Material Design UI**
+### **3. Print Single Label with Three Lines**
 
 ```dart
-import 'package:flutter/material.dart';
-import 'package:ntbp_plugin/ntbp_plugin.dart';
-
-class MaterialPrinterScreen extends StatefulWidget {
-  @override
-  _MaterialPrinterScreenState createState() => _MaterialPrinterScreenState();
-}
-
-class _MaterialPrinterScreenState extends State<MaterialPrinterScreen> {
-  final NtbpPlugin _plugin = NtbpPlugin();
-  List<Map<String, dynamic>> _devices = [];
-  Map<String, dynamic>? _connectedDevice;
-  bool _isScanning = false;
-  bool _isPrinting = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text('Thermal Printer')),
-      body: Padding(
-        padding: EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            // Bluetooth Status
-            Card(
-              child: ListTile(
-                leading: Icon(Icons.bluetooth),
-                title: Text('Bluetooth Status'),
-                subtitle: Text(_connectedDevice?['name'] ?? 'Not Connected'),
-                trailing: _connectedDevice != null
-                    ? IconButton(
-                        icon: Icon(Icons.disconnect),
-                        onPressed: _disconnect,
-                      )
-                    : null,
-              ),
-            ),
-            
-            // Scan Button
-            ElevatedButton.icon(
-              onPressed: _isScanning ? null : _startScan,
-              icon: Icon(_isScanning ? Icons.stop : Icons.search),
-              label: Text(_isScanning ? 'Scanning...' : 'Scan for Devices'),
-            ),
-            
-            // Device List
-            Expanded(
-              child: ListView.builder(
-                itemCount: _devices.length,
-                itemBuilder: (context, index) {
-                  final device = _devices[index];
-                  return ListTile(
-                    title: Text(device['name'] ?? 'Unknown Device'),
-                    subtitle: Text(device['address'] ?? ''),
-                    trailing: ElevatedButton(
-                      onPressed: () => _connectToDevice(device),
-                      child: Text('Connect'),
-                    ),
-                  );
-                },
-              ),
-            ),
-            
-            // Print Buttons
-            if (_connectedDevice != null) ...[
-              ElevatedButton.icon(
-                onPressed: _isPrinting ? null : _printSingleLabel,
-                icon: Icon(Icons.print),
-                label: Text('Print Single Label'),
-              ),
-              SizedBox(height: 8),
-              ElevatedButton.icon(
-                onPressed: _isPrinting ? null : _printMultipleLabels,
-                icon: Icon(Icons.print_disabled),
-                label: Text('Print Multiple Labels'),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _startScan() async {
-    setState(() => _isScanning = true);
-    try {
-      final devices = await _plugin.startScan();
-      setState(() {
-        _devices = devices.cast<Map<String, dynamic>>();
-        _isScanning = false;
-      });
-    } catch (e) {
-      setState(() => _isScanning = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Scan failed: $e')),
-      );
-    }
-  }
-
-  Future<void> _connectToDevice(Map<String, dynamic> device) async {
-    try {
-      await _plugin.connectToDevice(device);
-      setState(() => _connectedDevice = device);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Connected to ${device['name']}')),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Connection failed: $e')),
-      );
-    }
-  }
-
-  Future<void> _disconnect() async {
-    try {
-      await _plugin.disconnect();
-      setState(() => _connectedDevice = null);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Disconnected')),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Disconnect failed: $e')),
-      );
-    }
-  }
-
-  Future<void> _printSingleLabel() async {
-    setState(() => _isPrinting = true);
-    try {
-      final success = await _plugin.printSingleLabelWithGapDetection(
-        qrData: "QR_${DateTime.now().millisecondsSinceEpoch}",
-        textData: "Sample Label",
-        width: 75.0,
-        height: 50.0,
-        unit: 'mm',
-        dpi: 203,
-        copies: 1,
-        textSize: 9,
-      );
-      
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Label printed successfully!')),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Print failed: $e')),
-      );
-    } finally {
-      setState(() => _isPrinting = false);
-    }
-  }
-
-  Future<void> _printMultipleLabels() async {
-    setState(() => _isPrinting = true);
-    try {
-      final labelData = [
-        {'qrData': 'QR001', 'textData': 'Product A'},
-        {'qrData': 'QR002', 'textData': 'Product B'},
-        {'qrData': 'QR003', 'textData': 'Product C'},
-      ];
-      
-      final success = await _plugin.printMultipleLabelsWithGapDetection(
-        labelDataList: labelData,
-        width: 75.0,
-        height: 50.0,
-        unit: 'mm',
-        dpi: 203,
-        copiesPerLabel: 1,
-        textSize: 9,
-      );
-      
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('All labels printed successfully!')),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Print failed: $e')),
-      );
-    } finally {
-      setState(() => _isPrinting = false);
-    }
-  }
-}
-```
-
-### **Example 2: Cupertino (iOS Style) UI**
-
-```dart
-import 'package:flutter/cupertino.dart';
-import 'package:ntbp_plugin/ntbp_plugin.dart';
-
-class CupertinoPrinterScreen extends StatefulWidget {
-  @override
-  _CupertinoPrinterScreenState createState() => _CupertinoPrinterScreenState();
-}
-
-class _CupertinoPrinterScreenState extends State<CupertinoPrinterScreen> {
-  final NtbpPlugin _plugin = NtbpPlugin();
-  List<Map<String, dynamic>> _devices = [];
-  Map<String, dynamic>? _connectedDevice;
-
-  @override
-  Widget build(BuildContext context) {
-    return CupertinoPageScaffold(
-      navigationBar: CupertinoNavigationBar(
-        middle: Text('Thermal Printer'),
-      ),
-      child: SafeArea(
-        child: Padding(
-          padding: EdgeInsets.all(16.0),
-          child: Column(
-            children: [
-              // Status Card
-              Container(
-                padding: EdgeInsets.all(16.0),
-                decoration: BoxDecoration(
-                  color: CupertinoColors.systemGrey6,
-                  borderRadius: BorderRadius.circular(8.0),
-                ),
-                child: Row(
-                  children: [
-                    Icon(CupertinoIcons.bluetooth),
-                    SizedBox(width: 8.0),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Bluetooth Status',
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          Text(_connectedDevice?['name'] ?? 'Not Connected'),
-                        ],
-                      ),
-                    ),
-                    if (_connectedDevice != null)
-                      CupertinoButton(
-                        padding: EdgeInsets.zero,
-                        onPressed: _disconnect,
-                        child: Icon(CupertinoIcons.clear),
-                      ),
-                  ],
-                ),
-              ),
-              
-              SizedBox(height: 16.0),
-              
-              // Scan Button
-              SizedBox(
-                width: double.infinity,
-                child: CupertinoButton.filled(
-                  onPressed: _startScan,
-                  child: Text('Scan for Devices'),
-                ),
-              ),
-              
-              SizedBox(height: 16.0),
-              
-              // Device List
-              Expanded(
-                child: CupertinoScrollbar(
-                  child: ListView.builder(
-                    itemCount: _devices.length,
-                    itemBuilder: (context, index) {
-                      final device = _devices[index];
-                      return Container(
-                        margin: EdgeInsets.only(bottom: 8.0),
-                        decoration: BoxDecoration(
-                          color: CupertinoColors.systemGrey6,
-                          borderRadius: BorderRadius.circular(8.0),
-                        ),
-                        child: ListTile(
-                          title: Text(device['name'] ?? 'Unknown Device'),
-                          subtitle: Text(device['address'] ?? ''),
-                          trailing: CupertinoButton(
-                            padding: EdgeInsets.symmetric(horizontal: 16.0),
-                            onPressed: () => _connectToDevice(device),
-                            child: Text('Connect'),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-              
-              // Print Buttons
-              if (_connectedDevice != null) ...[
-                SizedBox(height: 16.0),
-                SizedBox(
-                  width: double.infinity,
-                  child: CupertinoButton.filled(
-                    onPressed: _printSingleLabel,
-                    child: Text('Print Single Label'),
-                  ),
-                ),
-                SizedBox(height: 8.0),
-                SizedBox(
-                  width: double.infinity,
-                  child: CupertinoButton.filled(
-                    onPressed: _printMultipleLabels,
-                    child: Text('Print Multiple Labels'),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // Implementation methods similar to Material example...
-  Future<void> _startScan() async { /* ... */ }
-  Future<void> _connectToDevice(Map<String, dynamic> device) async { /* ... */ }
-  Future<void> _disconnect() async { /* ... */ }
-  Future<void> _printSingleLabel() async { /* ... */ }
-  Future<void> _printMultipleLabels() async { /* ... */ }
-}
-```
-
-### **Example 3: Custom UI (No Framework Dependencies)**
-
-```dart
-import 'package:flutter/material.dart';
-import 'package:ntbp_plugin/ntbp_plugin.dart';
-
-class CustomPrinterScreen extends StatefulWidget {
-  @override
-  _CustomPrinterScreenState createState() => _CustomPrinterScreenState();
-}
-
-class _CustomPrinterScreenState extends State<CustomPrinterScreen> {
-  final NtbpPlugin _plugin = NtbpPlugin();
-  List<Map<String, dynamic>> _devices = [];
-  Map<String, dynamic>? _connectedDevice;
-  bool _isScanning = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Colors.blue[900]!, Colors.blue[600]!],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Custom Header
-              Container(
-                padding: EdgeInsets.all(20.0),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: EdgeInsets.all(12.0),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(12.0),
-                      ),
-                      child: Icon(
-                        Icons.print,
-                        color: Colors.white,
-                        size: 28.0,
-                      ),
-                    ),
-                    SizedBox(width: 16.0),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Thermal Printer',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 24.0,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Text(
-                            _connectedDevice?['name'] ?? 'Not Connected',
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.8),
-                              fontSize: 16.0,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              
-              // Main Content
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(30.0),
-                      topRight: Radius.circular(30.0),
-                    ),
-                  ),
-                  child: Padding(
-                    padding: EdgeInsets.all(20.0),
-                    child: Column(
-                      children: [
-                        // Scan Button
-                        Container(
-                          width: double.infinity,
-                          height: 56.0,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [Colors.orange[400]!, Colors.orange[600]!],
-                            ),
-                            borderRadius: BorderRadius.circular(28.0),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.orange.withOpacity(0.3),
-                                blurRadius: 8.0,
-                                offset: Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(28.0),
-                              onTap: _isScanning ? null : _startScan,
-                              child: Center(
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      _isScanning ? Icons.stop : Icons.search,
-                                      color: Colors.white,
-                                      size: 24.0,
-                                    ),
-                                    SizedBox(width: 8.0),
-                                    Text(
-                                      _isScanning ? 'Scanning...' : 'Scan for Devices',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 18.0,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        
-                        SizedBox(height: 24.0),
-                        
-                        // Device List
-                        Expanded(
-                          child: _devices.isEmpty
-                              ? Center(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.bluetooth_searching,
-                                        size: 64.0,
-                                        color: Colors.grey[400],
-                                      ),
-                                      SizedBox(height: 16.0),
-                                      Text(
-                                        'No devices found',
-                                        style: TextStyle(
-                                          fontSize: 18.0,
-                                          color: Colors.grey[600],
-                                        ),
-                                      ),
-                                      Text(
-                                        'Press scan to discover devices',
-                                        style: TextStyle(
-                                          fontSize: 14.0,
-                                          color: Colors.grey[500],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                )
-                              : ListView.builder(
-                                  itemCount: _devices.length,
-                                  itemBuilder: (context, index) {
-                                    final device = _devices[index];
-                                    return Container(
-                                      margin: EdgeInsets.only(bottom: 12.0),
-                                      decoration: BoxDecoration(
-                                        color: Colors.grey[50],
-                                        borderRadius: BorderRadius.circular(16.0),
-                                        border: Border.all(
-                                          color: Colors.grey[200]!,
-                                          width: 1.0,
-                                        ),
-                                      ),
-                                      child: ListTile(
-                                        contentPadding: EdgeInsets.symmetric(
-                                          horizontal: 20.0,
-                                          vertical: 8.0,
-                                        ),
-                                        leading: Container(
-                                          padding: EdgeInsets.all(8.0),
-                                          decoration: BoxDecoration(
-                                            color: Colors.blue[100],
-                                            borderRadius: BorderRadius.circular(8.0),
-                                          ),
-                                          child: Icon(
-                                            Icons.bluetooth,
-                                            color: Colors.blue[600],
-                                            size: 20.0,
-                                          ),
-                                        ),
-                                        title: Text(
-                                          device['name'] ?? 'Unknown Device',
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                        subtitle: Text(
-                                          device['address'] ?? '',
-                                          style: TextStyle(
-                                            fontSize: 12.0,
-                                            color: Colors.grey[600],
-                                          ),
-                                        ),
-                                        trailing: Container(
-                                          height: 40.0,
-                                          child: ElevatedButton(
-                                            onPressed: () => _connectToDevice(device),
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: Colors.blue[600],
-                                              foregroundColor: Colors.white,
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius: BorderRadius.circular(20.0),
-                                              ),
-                                            ),
-                                            child: Text('Connect'),
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                        ),
-                        
-                        // Print Buttons
-                        if (_connectedDevice != null) ...[
-                          SizedBox(height: 24.0),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Container(
-                                  height: 56.0,
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: [Colors.green[400]!, Colors.green[600]!],
-                                    ),
-                                    borderRadius: BorderRadius.circular(28.0),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.green.withOpacity(0.3),
-                                        blurRadius: 8.0,
-                                        offset: Offset(0, 4),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: InkWell(
-                                      borderRadius: BorderRadius.circular(28.0),
-                                      onTap: _printSingleLabel,
-                                      child: Center(
-                                        child: Row(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          children: [
-                                            Icon(
-                                              Icons.print,
-                                              color: Colors.white,
-                                              size: 24.0,
-                                            ),
-                                            SizedBox(width: 8.0),
-                                            Text(
-                                              'Single Label',
-                                              style: TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 16.0,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              SizedBox(width: 16.0),
-                              Expanded(
-                                child: Container(
-                                  height: 56.0,
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: [Colors.purple[400]!, Colors.purple[600]!],
-                                    ),
-                                    borderRadius: BorderRadius.circular(28.0),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.purple.withOpacity(0.3),
-                                        blurRadius: 8.0,
-                                        offset: Offset(0, 4),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: InkWell(
-                                      borderRadius: BorderRadius.circular(28.0),
-                                      onTap: _printMultipleLabels,
-                                      child: Center(
-                                        child: Row(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          children: [
-                                            Icon(
-                                              Icons.print_disabled,
-                                              color: Colors.white,
-                                              size: 24.0,
-                                            ),
-                                            SizedBox(width: 8.0),
-                                            Text(
-                                              'Multiple Labels',
-                                              style: TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 16.0,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // Implementation methods...
-  Future<void> _startScan() async { /* ... */ }
-  Future<void> _connectToDevice(Map<String, dynamic> device) async { /* ... */ }
-  Future<void> _printSingleLabel() async { /* ... */ }
-  Future<void> _printMultipleLabels() async { /* ... */ }
-}
-```
-
-## 🔧 **Advanced Features**
-
-### **Buffer Management**
-
-The plugin includes advanced buffer clearing strategies to prevent content bleeding:
-
-```dart
-// Clear buffer before critical operations
-await _plugin.clearBuffer();
-
-// Get printer status
-final status = await _plugin.getPrinterStatus();
-
-// Feed paper
-await _plugin.feedPaper();
-```
-
-### **Custom Label Configuration**
-
-```dart
-// Get paper configuration for custom calculations
-final config = await _plugin.getLabelPaperConfig(
+bool success = await NtbpPlugin.printSingleLabelWithGapDetection(
+  qrData: "XYZ185EVT",
+  textData1: "Cust: Nashon Israel",      // Customer name
+  textData2: "Drp: Mwanza",             // Drop point
+  textData3: "Ref: 12345",              // Additional info
   width: 75.0,
-  height: 50.0,
+  height: 60.0,
   unit: 'mm',
   dpi: 203,
+  copies: 1,
+  textSize: 9,
 );
-
-print('Available width: ${config['availableWidth']} dots');
-print('QR size: ${config['qrSize']} dots');
 ```
 
-### **Device Pairing with PIN**
+### **4. Print Multiple Labels**
 
 ```dart
-// Request device pairing with PIN code
-await _plugin.requestDevicePairingWithPin(
-  device: device,
-  pinCode: '1234',
+List<Map<String, dynamic>> labelData = [
+  {
+    'qrData': 'XYZ185EVT',
+    'textData1': 'Cust: Nashon Israel',
+    'textData2': 'Drp: Mwanza',
+    'textData3': 'Ref: 12345',
+  },
+  {
+    'qrData': 'XYZ186HYW',
+    'textData1': 'Cust: Emanuel Tarimo',
+    'textData2': 'Drp: Mbeya',
+    'textData3': 'Ref: 67890',
+  },
+];
+
+bool success = await NtbpPlugin.printMultipleLabelsWithGapDetection(
+  labelDataList: labelData,
+  width: 75.0,
+  height: 60.0,
+  unit: 'mm',
+  dpi: 203,
+  copiesPerLabel: 1,
+  textSize: 9,
 );
-
-// Get stored PIN code
-final pinCode = await _plugin.getStoredPinCode(device);
-
-// Remove stored PIN code
-await _plugin.removeStoredPinCode(device);
 ```
 
-## 📚 **API Reference**
+## 📋 **API Reference**
 
-### **Bluetooth Management**
+### **Core Methods**
 
-| Method | Description | Returns |
-|--------|-------------|---------|
-| `isBluetoothAvailable()` | Check if Bluetooth is available | `Future<bool>` |
-| `requestBluetoothPermissions()` | Request Bluetooth permissions | `Future<bool>` |
-| `startScan()` | Scan for Bluetooth devices | `Future<List<Map<String, dynamic>>>` |
-| `connectToDevice(device)` | Connect to selected device | `Future<void>` |
-| `disconnect()` | Disconnect from device | `Future<bool>` |
-| `getConnectionStatus()` | Get current connection status | `Future<String>` |
-| `getDetailedConnectionStatus()` | Get detailed connection info | `Future<Map<String, dynamic>>` |
+#### **Initialization**
+```dart
+static Future<void> initialize()
+```
+Initialize the plugin and prepare for Bluetooth operations.
 
-### **Printing Methods**
+#### **Bluetooth Management**
+```dart
+static Future<bool> isBluetoothAvailable()
+static Future<bool> requestBluetoothPermissions()
+static Future<void> startScan()
+static Future<void> stopScan()
+static Future<List<BluetoothDevice>> getDiscoveredDevices()
+static Future<bool> connectToDevice(BluetoothDevice device)
+static Future<bool> disconnect()
+static Future<bool> isConnected()
+```
 
-| Method | Description | Returns |
-|--------|-------------|---------|
-| `printSingleLabelWithGapDetection(...)` | Print single label with gap detection | `Future<bool>` |
-| `printMultipleLabelsWithGapDetection(...)` | Print multiple labels with gap detection | `Future<bool>` |
-| `printProfessionalLabel(...)` | Professional label printing | `Future<bool>` |
-| `printLabelSequence(...)` | Sequence label printing | `Future<bool>` |
-| `printCustomLabel(...)` | Custom label with specific sizes | `Future<bool>` |
-| `printSmartLabel(...)` | Smart label printing | `Future<bool>` |
-| `printSmartSequence(...)` | Smart sequence printing | `Future<bool>` |
+#### **Label Printing**
+```dart
+static Future<bool> printSingleLabelWithGapDetection({
+  required String qrData,
+  required String textData1,    // Customer name
+  required String textData2,    // Drop point
+  required String textData3,    // Additional info
+  required double width,
+  required double height,
+  String? unit,
+  int? dpi,
+  int? copies,
+  int? textSize,
+})
 
-### **Buffer Management**
+static Future<bool> printMultipleLabelsWithGapDetection({
+  required List<Map<String, dynamic>> labelDataList,
+  required double width,
+  required double height,
+  String? unit,
+  int? dpi,
+  int? copiesPerLabel,
+  int? textSize,
+})
+```
 
-| Method | Description | Returns |
-|--------|-------------|---------|
-| `clearBuffer()` | Clear printer buffer | `Future<bool>` |
-| `getPrinterStatus()` | Get printer status | `Future<String>` |
-| `feedPaper()` | Feed paper | `Future<bool>` |
+### **Data Models**
 
-### **Device Pairing**
+#### **BluetoothDevice**
+```dart
+class BluetoothDevice {
+  final String name;
+  final String address;
+  final bool isPaired;
+  final int rssi;
+}
+```
 
-| Method | Description | Returns |
-|--------|-------------|---------|
-| `requestDevicePairing(device)` | Request device pairing | `Future<bool>` |
-| `requestDevicePairingWithPin(device, pinCode)` | Pair with PIN code | `Future<bool>` |
-| `getStoredPinCode(device)` | Get stored PIN code | `Future<String?>` |
-| `removeStoredPinCode(device)` | Remove stored PIN code | `Future<bool>` |
-| `checkDevicePairingStatus(device)` | Check pairing status | `Future<bool>` |
+#### **PrintCommand**
+```dart
+class PrintCommand {
+  final String command;
+  final Map<String, dynamic> parameters;
+}
+```
 
-## 🚨 **Troubleshooting**
+## 🎨 **Label Layout Features**
 
-### **Common Issues & Solutions**
+### **Perfect Positioning**
+- **QR Code**: Automatically centered with optimal sizing
+- **Text Alignment**: All three text lines start at the same left position as QR code
+- **Vertical Spacing**: 8mm gap after QR code, 4mm between text lines
+- **Responsive Design**: Adapts to different label sizes automatically
 
-#### **1. Bluetooth Not Available**
+### **Supported Label Sizes**
+- **Small**: 50x30mm - Compact labels for basic info
+- **Medium**: 75x60mm - Standard labels with three text lines
+- **Large**: 100x80mm - Extended labels for detailed information
+
+### **Text Configuration**
+- **Line 1**: Customer name (e.g., "Cust: Nashon Israel")
+- **Line 2**: Drop point (e.g., "Drp: Mwanza")
+- **Line 3**: Additional info (e.g., "Ref: 12345")
+
+## 🔧 **Advanced Configuration**
+
+### **DPI Settings**
+```dart
+// Standard 203 DPI (recommended)
+dpi: 203
+
+// High resolution 300 DPI
+dpi: 300
+```
+
+### **Text Size Options**
+```dart
+// Small text (7-8)
+textSize: 7
+
+// Standard text (9-10)
+textSize: 9
+
+// Large text (11-12)
+textSize: 11
+```
+
+### **Unit Options**
+```dart
+// Millimeters (recommended)
+unit: 'mm'
+
+// Inches
+unit: 'in'
+
+// Dots
+unit: 'dots'
+```
+
+## 🛠️ **Troubleshooting**
+
+### **Common Issues**
+
+#### **Connection Problems**
 ```dart
 // Check Bluetooth availability
-final isAvailable = await _plugin.isBluetoothAvailable();
-if (!isAvailable) {
-  // Handle Bluetooth not available
-  print('Bluetooth is not available on this device');
-}
-```
+bool available = await NtbpPlugin.isBluetoothAvailable();
 
-#### **2. Permission Denied**
-```dart
 // Request permissions
-final hasPermission = await _plugin.requestBluetoothPermissions();
-if (!hasPermission) {
-  // Guide user to settings
-  print('Please enable Bluetooth permissions in device settings');
-}
-```
+bool granted = await NtbpPlugin.requestBluetoothPermissions();
 
-#### **3. No Devices Found**
-```dart
-// Ensure Bluetooth is on and scan again
-try {
-  final devices = await _plugin.startScan();
-  if (devices.isEmpty) {
-    print('No devices found. Ensure printer is powered on and in pairing mode.');
-  }
-} catch (e) {
-  print('Scan failed: $e');
-}
-```
-
-#### **4. Connection Failed**
-```dart
 // Check connection status
-final status = await _plugin.getConnectionStatus();
-if (status != 'CONNECTED') {
-  // Try reconnecting
-  await _plugin.disconnect();
-  await Future.delayed(Duration(seconds: 2));
-  await _plugin.connectToDevice(device);
-}
+bool connected = await NtbpPlugin.isConnected();
 ```
 
-#### **5. Printing Issues**
-```dart
-// Clear buffer before printing
-await _plugin.clearBuffer();
+#### **Printing Issues**
+- Ensure printer is properly connected
+- Check label dimensions match your physical labels
+- Verify DPI settings match your printer
+- Try reducing text size if content is cut off
 
-// Check printer status
-final printerStatus = await _plugin.getPrinterStatus();
-if (printerStatus != 'READY') {
-  print('Printer not ready: $printerStatus');
-  return;
-}
-```
+#### **Text Positioning**
+- The plugin automatically handles perfect alignment
+- Text lines start at the same left position as QR code
+- Vertical spacing is optimized for readability
 
 ### **Debug Information**
-
-Enable detailed logging for troubleshooting:
-
 ```dart
-// Check detailed connection status
-final details = await _plugin.getDetailedConnectionStatus();
-print('Connection details: $details');
+// Get detailed connection status
+Map<String, dynamic> status = await NtbpPlugin.getDetailedConnectionStatus();
 
-// Monitor connection state changes
-// The plugin automatically logs all operations
+// Get printer status
+Map<String, dynamic> printerStatus = await NtbpPlugin.getPrinterStatus();
 ```
 
-## 🛠️ **Development Guide**
+## 📱 **Platform-Specific Notes**
 
-### **Building from Source**
+### **Android**
+- Requires `BLUETOOTH` and `BLUETOOTH_ADMIN` permissions
+- Supports both Classic Bluetooth and BLE
+- Automatic permission handling
+
+### **iOS**
+- Requires `NSBluetoothAlwaysUsageDescription` in Info.plist
+- Supports Classic Bluetooth (SPP) connections
+- Automatic permission prompts
+
+## 🧪 **Testing**
+
+The plugin includes comprehensive test coverage:
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/ntbp_plugin.git
-cd ntbp_plugin
+# Run tests
+flutter test
 
-# Get dependencies
+# Run with coverage
+flutter test --coverage
+```
+
+## 📄 **Example App**
+
+Check out the complete example app in the `example/` directory:
+
+- **Bluetooth Discovery**: Automatic device scanning
+- **Connection Management**: Robust connection handling
+- **Label Printing**: Single and multiple label examples
+- **UI Implementation**: Responsive design for different screen sizes
+
+## 🤝 **Contributing**
+
+We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
+
+### **Development Setup**
+```bash
+# Clone the repository
+git clone https://github.com/your-username/ntbp_plugin.git
+
+# Install dependencies
 flutter pub get
 
 # Run tests
 flutter test
 
-# Build example app
-cd example
-flutter build apk --debug
+# Run example app
+cd example && flutter run
 ```
 
-### **Project Structure**
+## 📝 **Changelog**
 
-```
-ntbp_plugin/
-├── lib/
-│   ├── ntbp_plugin.dart              # Main plugin interface
-│   ├── ntbp_plugin_platform_interface.dart  # Abstract interface
-│   └── ntbp_plugin_method_channel.dart      # Method channel implementation
-├── android/
-│   └── src/main/kotlin/
-│       └── com/example/ntbp_plugin/
-│           └── NtbpPlugin.kt         # Android implementation
-├── ios/
-│   └── Classes/
-│       └── NtbpPlugin.swift          # iOS implementation
-├── example/
-│   └── lib/
-│       └── main.dart                 # Example app
-└── test/
-    └── ntbp_plugin_test.dart         # Unit tests
-```
+### **Version 2.0.0**
+- ✨ **NEW**: Three-line text support with perfect alignment
+- ✨ **NEW**: Enhanced positioning system for professional labels
+- ✨ **NEW**: Improved gap detection and buffer management
+- ✨ **NEW**: ESC/POS printer support with TSPL forced
+- 🔧 **IMPROVED**: Better error handling and connection management
+- 🔧 **IMPROVED**: Optimized text spacing and positioning
+- 🐛 **FIXED**: Multiple label printing issues
+- 🐛 **FIXED**: Text overlap and positioning problems
 
-### **Adding New Features**
-
-1. **Update Platform Interface**: Add abstract methods to `ntbp_plugin_platform_interface.dart`
-2. **Implement on Android**: Add Kotlin implementation in `NtbpPlugin.kt`
-3. **Implement on iOS**: Add Swift implementation in `NtbpPlugin.swift`
-4. **Update Method Channel**: Add method handling in `ntbp_plugin_method_channel.dart`
-5. **Add Tests**: Create unit tests for new functionality
-6. **Update Documentation**: Document new features and usage
-
-## 🤝 **Contributing**
-
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
-
-### **Development Setup**
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
-
-### **Code Style**
-
-- Follow Flutter/Dart conventions
-- Use meaningful variable names
-- Add comprehensive comments
-- Include error handling
-- Write unit tests
+### **Version 1.0.0**
+- 🎉 **INITIAL**: First stable release
+- ✨ **FEATURES**: Basic Bluetooth connectivity and label printing
+- ✨ **FEATURES**: QR code and text printing support
+- ✨ **FEATURES**: Gap detection and buffer management
 
 ## 📄 **License**
 
@@ -1148,19 +365,16 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 **Acknowledgments**
 
-- Flutter team for the excellent framework
-- TSPL command reference documentation
-- Bluetooth development community
-- All contributors and testers
+- Flutter team for the excellent platform
+- Thermal printer manufacturers for their documentation
+- Community contributors and testers
 
 ## 📞 **Support**
 
-- **Issues**: [GitHub Issues](https://github.com/yourusername/ntbp_plugin/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/ntbp_plugin/discussions)
-- **Documentation**: [Full Documentation](https://github.com/yourusername/ntbp_plugin/wiki)
+- **Issues**: [GitHub Issues](https://github.com/your-username/ntbp_plugin/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/your-username/ntbp_plugin/discussions)
+- **Email**: support@your-domain.com
 
 ---
 
 **Made with ❤️ for the Flutter community**
-
-*This plugin is designed to work seamlessly with any UI implementation - whether you're using Material Design, Cupertino, or custom widgets, the thermal printing functionality remains consistent and reliable.*

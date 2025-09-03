@@ -3,12 +3,151 @@ export 'ntbp_plugin_platform_interface.dart';
 export 'ntbp_plugin_method_channel.dart';
 export 'models/bluetooth_device.dart';
 export 'models/print_command.dart';
+export 'src/protocols.dart';
 
 import 'ntbp_plugin_platform_interface.dart';
 import 'models/bluetooth_device.dart';
 import 'models/print_command.dart';
+import 'src/protocols/protocol_manager.dart';
 
 class NtbpPlugin {
+  static final ProtocolManager _protocolManager = ProtocolManager();
+
+  /// Get the protocol manager instance
+  static ProtocolManager get protocolManager => _protocolManager;
+
+  /// Initialize protocol for a specific printer model
+  static Future<bool> initializeProtocol(String printerModel) {
+    return _protocolManager.initializeProtocol(printerModel);
+  }
+
+  /// Auto-detect and initialize protocol
+  static Future<bool> autoDetectProtocol({
+    String? deviceName,
+    String? deviceAddress,
+    Map<String, dynamic>? deviceProperties,
+  }) {
+    return _protocolManager.autoDetectProtocol(
+      deviceName: deviceName,
+      deviceAddress: deviceAddress,
+      deviceProperties: deviceProperties,
+    );
+  }
+
+  /// Get current protocol information
+  static Map<String, dynamic> getProtocolInfo() {
+    return {
+      'isInitialized': _protocolManager.isProtocolInitialized,
+      'currentProtocol': _protocolManager.currentProtocol?.protocolName,
+      'currentPrinterModel': _protocolManager.currentPrinterModel,
+      'capabilities': _protocolManager.getProtocolCapabilities(),
+    };
+  }
+
+  /// Get all supported printer models
+  static List<String> getSupportedPrinterModels() {
+    return _protocolManager.getSupportedPrinterModels();
+  }
+
+  /// Check if a printer model is supported
+  static bool isPrinterSupported(String printerModel) {
+    return _protocolManager.isPrinterSupported(printerModel);
+  }
+
+  /// Print single label using protocol system
+  static Future<bool> printSingleLabelWithProtocol({
+    required String qrData,
+    required String textData,
+    required double labelWidth,
+    required double labelHeight,
+    required String unit,
+    required int dpi,
+    required int copies,
+    required int textSize,
+  }) {
+    return _protocolManager.printSingleLabel(
+      qrData: qrData,
+      textData: textData,
+      labelWidth: labelWidth,
+      labelHeight: labelHeight,
+      unit: unit,
+      dpi: dpi,
+      copies: copies,
+      textSize: textSize,
+    );
+  }
+
+  /// Print multiple labels using protocol system
+  static Future<bool> printMultipleLabelsWithProtocol({
+    required List<Map<String, dynamic>> labelDataList,
+    required double labelWidth,
+    required double labelHeight,
+    required String unit,
+    required int dpi,
+    required int copiesPerLabel,
+    required int textSize,
+  }) {
+    return _protocolManager.printMultipleLabels(
+      labelDataList: labelDataList,
+      labelWidth: labelWidth,
+      labelHeight: labelHeight,
+      unit: unit,
+      dpi: dpi,
+      copiesPerLabel: copiesPerLabel,
+      textSize: textSize,
+    );
+  }
+
+  /// Initialize printer using protocol system
+  static Future<bool> initializePrinterWithProtocol({
+    required double labelWidth,
+    required double labelHeight,
+    required String unit,
+    required int dpi,
+  }) {
+    return _protocolManager.initializePrinter(
+      labelWidth: labelWidth,
+      labelHeight: labelHeight,
+      unit: unit,
+      dpi: dpi,
+    );
+  }
+
+  /// Clear buffer using protocol system
+  static Future<bool> clearBufferWithProtocol() {
+    return _protocolManager.clearBuffer();
+  }
+
+  /// Get printer status using protocol system
+  static Future<Map<String, dynamic>> getPrinterStatusWithProtocol() {
+    return _protocolManager.getPrinterStatus();
+  }
+
+  /// Feed paper using protocol system
+  static Future<bool> feedPaperWithProtocol() {
+    return _protocolManager.feedPaper();
+  }
+
+  /// Send gap detection commands using protocol system
+  static Future<bool> sendGapDetectionCommandsWithProtocol({
+    required double labelWidth,
+    required double labelHeight,
+    required String unit,
+    required int dpi,
+  }) {
+    return _protocolManager.sendGapDetectionCommands(
+      labelWidth: labelWidth,
+      labelHeight: labelHeight,
+      unit: unit,
+      dpi: dpi,
+    );
+  }
+
+  /// Reset protocol manager
+  static void resetProtocol() {
+    _protocolManager.reset();
+  }
+
   Future<String?> getPlatformVersion() {
     return NtbpPluginPlatform.instance.getPlatformVersion();
   }
@@ -334,7 +473,9 @@ class NtbpPlugin {
   /// Print single label with gap detection and proper positioning
   static Future<bool> printSingleLabelWithGapDetection({
     required String qrData,
-    required String textData,
+    required String textData1, // Customer name
+    required String textData2, // Drop point
+    required String textData3, // Additional info
     required double width,
     required double height,
     String? unit,
@@ -344,7 +485,9 @@ class NtbpPlugin {
   }) {
     return NtbpPluginPlatform.instance.printSingleLabelWithGapDetection(
       qrData: qrData,
-      textData: textData,
+      textData1: textData1,
+      textData2: textData2,
+      textData3: textData3,
       width: width,
       height: height,
       unit: unit,

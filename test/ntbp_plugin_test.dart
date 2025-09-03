@@ -205,7 +205,9 @@ class MockNtbpPluginPlatform
   @override
   Future<bool> printSingleLabelWithGapDetection({
     required String qrData,
-    required String textData,
+    required String textData1,
+    required String textData2,
+    required String textData3,
     required double width,
     required double height,
     String? unit,
@@ -224,6 +226,15 @@ class MockNtbpPluginPlatform
     int? copiesPerLabel,
     int? textSize,
   }) => Future.value(true);
+
+  @override
+  Future<bool> sendProtocolCommands(List<int> commands, String protocolName) => Future.value(true);
+
+  @override
+  Future<bool> initializeProtocolPrinter(String printerModel, double labelWidth, double labelHeight, String unit, int dpi) => Future.value(true);
+
+  @override
+  Future<bool> printWithProtocol(String protocolName, Map<String, dynamic> printData) => Future.value(true);
 }
 
 void main() {

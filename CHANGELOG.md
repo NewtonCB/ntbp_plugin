@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2024-12-XX
+
+### Added
+- **Three-Line Text Support** - Enhanced label printing with customer name, position, and additional info
+- **Perfect Text Alignment** - All text lines start at the same left position as QR code
+- **Enhanced Positioning System** - Professional-quality label layout with precise positioning
+- **ESC/POS Printer Support** - TSPL forced approach for ESC/POS compatible printers
+- **Improved Gap Detection** - Better buffer management and frame handling
+- **Optimized Text Spacing** - 8mm gap after QR code, 4mm between text lines
+
+### Changed
+- **API Enhancement** - Updated `printSingleLabelWithGapDetection` to support three text parameters
+- **Positioning Algorithm** - Improved QR code and text positioning for better visual alignment
+- **Buffer Management** - Enhanced clearing strategies for more reliable printing
+- **Connection Handling** - Simplified and more robust Bluetooth connection logic
+
+### Fixed
+- **Text Overlap Issues** - Resolved text positioning problems that caused overlap with QR codes
+- **Multiple Label Printing** - Fixed issues with text not appearing on multiple labels
+- **Positioning Accuracy** - Corrected text alignment to start exactly at QR code left edge
+- **Line Spacing** - Optimized vertical spacing between text lines for better readability
+
+### Technical Improvements
+- **Kotlin Implementation** - Enhanced Android native code with better positioning logic
+- **Test Coverage** - Updated test files to match new API signatures
+- **Documentation** - Comprehensive README update with new features and examples
+- **Error Handling** - Improved error messages and debugging information
+
 ## [1.0.0] - 2024-01-XX
 
 ### Added
