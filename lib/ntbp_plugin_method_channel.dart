@@ -476,4 +476,12 @@ class MethodChannelNtbpPlugin extends NtbpPluginPlatform {
     });
     return result ?? false;
   }
+
+  @override
+  Future<int> queryPrinterStatus({int timeoutMs = 2000}) async {
+    final result = await methodChannel.invokeMethod<int>('queryPrinterStatus', {
+      'timeoutMs': timeoutMs,
+    });
+    return result ?? -1;
+  }
 }

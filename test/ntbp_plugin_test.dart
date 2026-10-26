@@ -235,6 +235,9 @@ class MockNtbpPluginPlatform
 
   @override
   Future<bool> printWithProtocol(String protocolName, Map<String, dynamic> printData) => Future.value(true);
+
+  @override
+  Future<int> queryPrinterStatus({int timeoutMs = 2000}) => Future.value(0);
 }
 
 void main() {

@@ -3,9 +3,9 @@
 [![Flutter](https://img.shields.io/badge/Flutter-3.19+-blue.svg)](https://flutter.dev)
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20iOS-green.svg)](https://flutter.dev/docs/development/platform-integration)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-2.0.0-orange.svg)](https://pub.dev/packages/ntbp_plugin)
+[![Version](https://img.shields.io/badge/Version-3.0.0-orange.svg)](https://pub.dev/packages/ntbp_plugin)
 
-A comprehensive, production-ready Flutter plugin for thermal Bluetooth label printing with advanced features including gap detection, precise positioning, and support for multiple label formats. **Works with any UI implementation** - the plugin handles all the complexity behind the scenes.
+Flutter plugin for thermal Bluetooth label printing on TSPL printers such as the **Xprinter XP-420B** and the N41. Label layouts are rendered to TSPL in Dart so Android and iOS print identical output; the native side uses the Xprinter vendor SDKs for transport and printer status. **Works with any UI implementation.**
 
 ## 🎯 **Why Choose NTBP Plugin?**
 
@@ -41,11 +41,13 @@ A comprehensive, production-ready Flutter plugin for thermal Bluetooth label pri
 
 ## 📱 **Supported Printers**
 
+- **Xprinter XP-420B** (4-inch desktop label printer, 203 dpi, TSPL) - primary target since 3.0.0
 - **TSPL-Compatible Printers**: N41, N42, and similar thermal label printers
 - **ESC/POS Printers**: Romeson KT58L and similar models (with TSPL forced)
 - **Resolution**: 203 DPI (8 dots/mm) and higher
 - **Label Sizes**: 2" (50mm) to 4.65" (118mm) width
-- **Media Types**: Die-cut labels, continuous paper, black mark paper
+- **Media Types**: Die-cut labels (gap), black mark paper, continuous paper
+- **Transport**: Android classic Bluetooth (SPP) via Xprinter `printer-lib`; iOS BLE via Xprinter `PrinterSDK`
 
 ## 📦 **Installation**
 
@@ -53,8 +55,13 @@ Add this to your package's `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  ntbp_plugin: ^2.0.0
+  ntbp_plugin: ^3.0.0
 ```
+
+Android needs `minSdkVersion 21` or higher. On Android 12+ request `BLUETOOTH_SCAN` and
+`BLUETOOTH_CONNECT` at runtime (for example with `permission_handler`) before scanning.
+iOS needs `NSBluetoothAlwaysUsageDescription` in `Info.plist`. The bundled iOS library
+has no Apple-silicon simulator slice, so use a real device or a Rosetta simulator.
 
 Then run:
 
@@ -86,7 +93,70 @@ List<BluetoothDevice> devices = await NtbpPlugin.getDiscoveredDevices();
 bool connected = await NtbpPlugin.connectToDevice(devices.first);
 ```
 
-### **3. Print Single Label with Three Lines**
+### **3. Print a Cargo Shipment Label (XP-420B)**
+
+The layout matches a 100 x 150 mm (4" x 6") shipping label: title, booking reference and
+item with a QR code, sender and receiver boxes, destination / weight / package,
+service type / date, and a Code 128 tracking barcode.
+
+```dart
+const label = CargoLabel(
+  bookingReference: 'BK-1025',
+  item: 'ITEM-001 / 5',
+  sender: ['Otapp Agency Limited', 'P.O. Box 1234', 'Dar es Salaam, Tanzania', 'Tel: +255 712 345 678'],
+  receiver: ['John Mwakyusa', 'P.O. Box 5678', 'Kinondoni, Dar es Salaam', 'Tel: +255 765 432 109'],
+  destination: 'DAR ES SALAAM',
+  weight: '5.0 KG',
+  package: '1 / 5',
+  serviceType: 'Standard',
+  date: '2025-10-19',
+  trackingNumber: '123456789012',
+  // qrData: defaults to trackingNumber
+);
+
+// Media settings. Defaults are 100 x 150 mm, 203 dpi, 3 mm gap, 1 copy.
+const config = LabelPrintConfig(gapMm: 3, density: 10);
+
+bool ok = await NtbpPlugin.printCargoLabel(label, config: config);
+```
+
+Print a series. The plugin polls the printer between labels and stops at the first
+error (out of paper, head open, jam) so nothing is lost in the buffer:
+
+```dart
+final result = await NtbpPlugin.printCargoLabels(labels, config: config);
+print('${result.printed}/${result.total} printed, failed: ${result.failedIndexes}');
+if (result.stoppedBy != null) print(result.stoppedBy!.description);
+```
+
+### **4. Calibrate the Gap Sensor (once per roll)**
+
+```dart
+await NtbpPlugin.calibrateGap();   // or autoCalibrate() / calibrateBlackMark()
+```
+
+Calibration feeds two or three labels. Do it after loading a new roll, not before every print.
+
+### **5. Printer Status**
+
+```dart
+final status = await NtbpPlugin.queryPrinterStatus();
+if (!status.isReady) print(status.description); // "Out of paper", "Head opened", ...
+```
+
+### **6. Custom TSPL**
+
+```dart
+final job = TsplBuilder()
+  ..sizeMm(100, 150)
+  ..gapMm(3)
+  ..cls()
+  ..text(40, 40, TsplFont.f24x32, 'Hello')
+  ..print(copies: 2);
+await NtbpPlugin.sendTspl(job.build());
+```
+
+### **7. Print Single Label with Three Lines (N41 layout)**
 
 ```dart
 bool success = await NtbpPlugin.printSingleLabelWithGapDetection(
@@ -103,7 +173,7 @@ bool success = await NtbpPlugin.printSingleLabelWithGapDetection(
 );
 ```
 
-### **4. Print Multiple Labels**
+### **8. Print Multiple Three-Line Labels**
 
 ```dart
 List<Map<String, dynamic>> labelData = [
@@ -292,11 +362,17 @@ Map<String, dynamic> printerStatus = await NtbpPlugin.getPrinterStatus();
 ## 📱 **Platform-Specific Notes**
 
 ### **Android**
+- Uses the Xprinter `printer-lib-3.5.8.aar` bundled with the plugin (classic Bluetooth SPP).
+- `minSdkVersion 21`.
+- Discovery lists bonded devices plus classic devices found in a 12 second scan.
 - Requires `BLUETOOTH` and `BLUETOOTH_ADMIN` permissions
 - Supports both Classic Bluetooth and BLE
 - Automatic permission handling
 
 ### **iOS**
+- Uses the Xprinter `PrinterSDK` static library bundled with the plugin (BLE).
+- Device address is the CoreBluetooth peripheral identifier; it is stable per phone.
+- The library has device (arm64) and x86_64 simulator slices only.
 - Requires `NSBluetoothAlwaysUsageDescription` in Info.plist
 - Supports Classic Bluetooth (SPP) connections
 - Automatic permission prompts
@@ -342,6 +418,13 @@ cd example && flutter run
 ```
 
 ## 📝 **Changelog**
+
+### **Version 3.0.0**
+- Xprinter XP-420B support with the cargo shipment label layout
+- Vendor SDK transports on Android (SPP) and iOS (BLE)
+- Printer status query, one-time gap calibration, series printing with error stop
+- Layouts rendered in Dart; identical output on both platforms
+- Fixed invalid TSPL (`CLEAR`, `GAPDETECT ON`), blank labels from `HOME`/`FORMFEED`, quote escaping
 
 ### **Version 2.0.0**
 - ✨ **NEW**: Three-line text support with perfect alignment

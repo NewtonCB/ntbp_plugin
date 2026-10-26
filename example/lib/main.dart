@@ -467,6 +467,216 @@ class _NtbpExamplePageState extends State<NtbpExamplePage> {
     }
   }
 
+
+  // ---------------------------------------------------------------------------
+  // XP-420B cargo labels
+  // ---------------------------------------------------------------------------
+
+  final TextEditingController _gapController = TextEditingController(text: '3');
+  final TextEditingController _cargoWidthController = TextEditingController(text: '100');
+  final TextEditingController _cargoHeightController = TextEditingController(text: '150');
+
+  LabelPrintConfig _cargoConfig() {
+    return LabelPrintConfig(
+      widthMm: double.tryParse(_cargoWidthController.text) ?? 100,
+      heightMm: double.tryParse(_cargoHeightController.text) ?? 150,
+      gapMm: double.tryParse(_gapController.text) ?? 3,
+      copies: int.tryParse(_copiesController.text) ?? 1,
+    );
+  }
+
+  CargoLabel _sampleCargoLabel({int index = 1, int total = 1}) {
+    return CargoLabel(
+      bookingReference: 'BK-1025',
+      item: 'ITEM-${index.toString().padLeft(3, '0')} / $total',
+      sender: const [
+        'Otapp Agency Limited',
+        'P.O. Box 1234',
+        'Dar es Salaam, Tanzania',
+        'Tel: +255 712 345 678',
+      ],
+      receiver: const [
+        'John Mwakyusa',
+        'P.O. Box 5678',
+        'Kinondoni, Dar es Salaam',
+        'Tel: +255 765 432 109',
+      ],
+      destination: 'DAR ES SALAAM',
+      weight: '5.0 KG',
+      package: '$index / $total',
+      serviceType: 'Standard',
+      date: '2025-10-19',
+      trackingNumber: '12345678901$index',
+    );
+  }
+
+  Future<void> _printCargoSample() async {
+    if (_connectedDevice == null) {
+      _showMessage('❌ Please connect to a printer first');
+      return;
+    }
+    try {
+      _showMessage('🏷️ Printing cargo label...');
+      final ok = await NtbpPlugin.printCargoLabel(_sampleCargoLabel(), config: _cargoConfig());
+      _showMessage(ok ? '✅ Cargo label sent' : '❌ Cargo label failed');
+    } catch (e) {
+      _showMessage('❌ Error: $e');
+    }
+  }
+
+  Future<void> _printCargoSeries() async {
+    if (_connectedDevice == null) {
+      _showMessage('❌ Please connect to a printer first');
+      return;
+    }
+    try {
+      _showMessage('🏷️ Printing 3 cargo labels...');
+      final labels = List.generate(3, (i) => _sampleCargoLabel(index: i + 1, total: 3));
+      final result = await NtbpPlugin.printCargoLabels(labels, config: _cargoConfig());
+      _showMessage(result.success
+          ? '✅ Printed ${result.printed}/${result.total} labels'
+          : '⚠️ ${result.printed}/${result.total} printed, failed ${result.failedIndexes}'
+            '${result.stoppedBy != null ? ' (${result.stoppedBy!.description})' : ''}');
+    } catch (e) {
+      _showMessage('❌ Error: $e');
+    }
+  }
+
+  Future<void> _calibrateGap() async {
+    if (_connectedDevice == null) {
+      _showMessage('❌ Please connect to a printer first');
+      return;
+    }
+    try {
+      final ok = await NtbpPlugin.calibrateGap();
+      _showMessage(ok ? '✅ Gap calibration started (printer feeds a few labels)' : '❌ Calibration failed');
+    } catch (e) {
+      _showMessage('❌ Error: $e');
+    }
+  }
+
+  Future<void> _queryStatus() async {
+    try {
+      final status = await NtbpPlugin.queryPrinterStatus();
+      _showMessage('🖨️ Printer status: ${status.description} (code ${status.code})');
+    } catch (e) {
+      _showMessage('❌ Error: $e');
+    }
+  }
+
+  Widget _buildCargoSection(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '📦 XP-420B Cargo Label',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: Colors.deepPurple[700],
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Default media is 100 x 150 mm. Calibrate once after loading a new roll.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _cargoWidthController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'Width (mm)', border: OutlineInputBorder(), isDense: true),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _cargoHeightController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'Height (mm)', border: OutlineInputBorder(), isDense: true),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _gapController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'Gap (mm)', border: OutlineInputBorder(), isDense: true),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _connectedDevice != null ? _printCargoSample : null,
+                    icon: const Icon(Icons.print, size: 18),
+                    label: const Text('Print Sample'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.deepPurple,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _connectedDevice != null ? _printCargoSeries : null,
+                    icon: const Icon(Icons.print_outlined, size: 18),
+                    label: const Text('Print 3 Labels'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.deepPurple,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _connectedDevice != null ? _calibrateGap : null,
+                    icon: const Icon(Icons.straighten, size: 18),
+                    label: const Text('Calibrate Gap'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.teal,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _queryStatus,
+                    icon: const Icon(Icons.info_outline, size: 18),
+                    label: const Text('Printer Status'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueGrey,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   bool _shouldUseForcedTSPL() {
     final deviceName = _connectedDevice?.name?.toLowerCase() ?? '';
     return deviceName.contains('kt58l') || 
@@ -1102,6 +1312,10 @@ class _NtbpExamplePageState extends State<NtbpExamplePage> {
                 ),
               ),
             ),
+
+            const SizedBox(height: 16),
+
+            _buildCargoSection(context),
 
             const SizedBox(height: 16),
 

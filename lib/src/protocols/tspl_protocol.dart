@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'printer_protocol.dart';
 import 'package:ntbp_plugin/ntbp_plugin.dart';
 
@@ -154,9 +153,7 @@ class TSPLProtocol implements PrinterProtocol {
     try {
       // TSPL buffer clearing commands
       final commands = [
-        ..._stringToBytes('CLEAR\r\n'),
         ..._stringToBytes('CLS\r\n'),
-        ..._stringToBytes('HOME\r\n'),
       ];
       
       return await _sendCommands(commands);
@@ -170,7 +167,7 @@ class TSPLProtocol implements PrinterProtocol {
   Future<Map<String, dynamic>> getPrinterStatus() async {
     try {
       // TSPL status commands
-      final commands = _stringToBytes('STATUS\r\n');
+      final commands = [0x1B, 0x21, 0x3F]; // ESC ! ? status query
       final response = await _sendCommands(commands);
       
       // Parse status response (simplified)
@@ -195,7 +192,6 @@ class TSPLProtocol implements PrinterProtocol {
       // TSPL paper feed commands
       final commands = [
         ..._stringToBytes('FORMFEED\r\n'),
-        ..._stringToBytes('FEED\r\n'),
       ];
       
       return await _sendCommands(commands);
@@ -313,7 +309,6 @@ class TSPLProtocol implements PrinterProtocol {
     final heightInDots = convertToDots(dpi, labelHeight, unit);
     
     final commands = <int>[];
-    commands.addAll(_stringToBytes('CLEAR\r\n')); // Clear buffer first
     commands.addAll(_stringToBytes('SIZE $widthInDots dot,$heightInDots dot\r\n')); // Set label size
     commands.addAll(_stringToBytes('CLS\r\n')); // Clear screen
     
@@ -333,11 +328,8 @@ class TSPLProtocol implements PrinterProtocol {
     final gapSize = _calculateGapSize(labelHeight, unit, dpi);
     
     final commands = <int>[];
-    commands.addAll(_stringToBytes('CLEAR\r\n')); // Clear buffer first
     commands.addAll(_stringToBytes('SIZE $widthInDots dot,$heightInDots dot\r\n')); // Set label size in dots
     commands.addAll(_stringToBytes('GAP $gapSize dot,0\r\n')); // Set gap between labels
-    commands.addAll(_stringToBytes('GAPDETECT ON\r\n')); // Enable gap detection
-    commands.addAll(_stringToBytes('AUTODETECT ON\r\n')); // Enable auto-detection
     commands.addAll(_stringToBytes('CLS\r\n')); // Clear screen
     
     return commands;

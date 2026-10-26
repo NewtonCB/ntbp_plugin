@@ -200,6 +200,74 @@ print('Socket: ${details["socketConnected"]}');
 print('Stream: ${details["outputStreamAvailable"]}');
 ```
 
+## 📦 Cargo Shipment Labels (XP-420B, since 3.0.0)
+
+All methods in this section are `static` on `NtbpPlugin`.
+
+### 1. `CargoLabel`
+
+Content model for the 4" x 6" cargo label. Required: `bookingReference`, `item`, `sender`
+(list of up to 4 lines), `receiver` (list of up to 4 lines), `destination`, `weight`,
+`package`, `serviceType`, `date`, `trackingNumber`. Optional: `title` (default
+`CARGO SHIPMENT`), `qrData` (defaults to `trackingNumber`) and `*Caption` overrides for
+every heading. `toMap()` / `CargoLabel.fromMap()` round-trip JSON.
+
+### 2. `LabelPrintConfig`
+
+Media settings shared by all jobs.
+
+| Field | Default | Meaning |
+|-------|---------|---------|
+| `widthMm`, `heightMm` | 100, 150 | Label size |
+| `dpi` | 203 | Printer resolution |
+| `gapMm`, `gapOffsetMm` | 3, 0 | Gap between labels (`GAP m,n`) |
+| `blackMark` | false | Use `BLINE` instead of `GAP` |
+| `direction` | 0 | 0 normal, 1 rotated 180 degrees |
+| `density` | null | `DENSITY 0..15`, null keeps the printer setting |
+| `speed` | null | `SPEED` inches/second, null keeps the printer setting |
+| `offsetMm` | 0 | `OFFSET` after each label |
+| `copies` | 1 | `PRINT 1,copies` |
+
+### 3. `printCargoLabel(CargoLabel label, {LabelPrintConfig config})` → `Future<bool>`
+
+Renders the label to TSPL and sends it. Returns true when the bytes were written.
+
+### 4. `printCargoLabels(List<CargoLabel> labels, {config, bool waitForPrinter = true, Duration perLabelTimeout})` → `Future<PrintBatchResult>`
+
+Prints each label as its own job. With `waitForPrinter` the plugin polls the printer
+status after each job and stops at the first error. `PrintBatchResult` has `total`,
+`printed`, `failedIndexes`, `stoppedBy` (a `PrinterStatus`) and `success`.
+
+### 5. `previewCargoLabel(label, {config})` → `String`
+
+The TSPL that would be sent. Useful for tests and debugging.
+
+### 6. `calibrateGap()`, `autoCalibrate()`, `calibrateBlackMark()` → `Future<bool>`
+
+Send `GAPDETECT`, `AUTODETECT` or `BLINEDETECT`. The printer feeds a few labels while it
+measures the media. Run once after loading a roll.
+
+### 7. `queryPrinterStatus({Duration timeout})` → `Future<PrinterStatus>`
+
+Sends the `ESC ! ?` status query. `PrinterStatus` exposes `code`, `isReady`,
+`isHeadOpen`, `isPaperJam`, `isOutOfPaper`, `isOutOfRibbon`, `isPaused`, `isPrinting`,
+`hasError`, `name`, `description`. `code` is -1 when the printer did not answer and -2
+when not connected.
+
+### 8. `waitUntilIdle({timeout, pollInterval})` → `Future<PrinterStatus>`
+
+Polls `queryPrinterStatus` until the printer is no longer printing.
+
+### 9. `sendTspl(String script)`, `sendBytes(List<int>)` → `Future<bool>`
+
+Send custom commands. Build scripts with `TsplBuilder` (`sizeMm`, `gapMm`, `cls`, `text`,
+`qrCode`, `barcode`, `box`, `bar`, `print`, `formFeed`, `gapDetect`, ...). `TsplFont`
+lists the built-in fonts (`f8x12` ... `f32x48`) and their metrics.
+
+### 10. `formFeed()` → `Future<bool>`
+
+Feeds one blank label (`FORMFEED`).
+
 ## 🖨️ Printing Methods
 
 ### 1. Single Label Printing

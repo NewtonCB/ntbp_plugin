@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-10-26
+
+### Added
+- **Xprinter XP-420B support** with a new cargo shipment label (`CargoLabel`,
+  `NtbpPlugin.printCargoLabel`, `NtbpPlugin.printCargoLabels`): title, booking
+  reference, item, QR code, sender and receiver boxes, destination / weight /
+  package row, service type / date row, Code 128 tracking barcode.
+- **Vendor SDK transports.** Android uses the Xprinter `printer-lib` (classic
+  Bluetooth SPP), iOS uses the Xprinter `PrinterSDK` (BLE). Both are bundled
+  in the plugin.
+- **Printer status query** (`NtbpPlugin.queryPrinterStatus`, `PrinterStatus`):
+  ready, head open, paper jam, out of paper, paused, printing.
+- **Gap calibration** (`NtbpPlugin.calibrateGap`, `autoCalibrate`,
+  `calibrateBlackMark`) as explicit one-time calls.
+- **Series printing with feedback.** `printCargoLabels` and
+  `printMultipleLabelsWithGapDetection` poll the printer between labels and
+  stop at the first error, returning which labels printed.
+- `LabelPrintConfig` for media size, gap, black mark, darkness, speed,
+  direction and copies. `TsplBuilder` and `NtbpPlugin.sendTspl` for custom
+  TSPL.
+- `NtbpPlugin.previewCargoLabel` returns the TSPL for a label without printing.
+
+### Changed
+- Label layouts are rendered to TSPL in Dart (`CargoLabelLayout`,
+  `ThreeLineQrLayout`). Android and iOS now print identical output; the native
+  code only transports bytes. The three-line QR label is a faithful port of
+  the v2 Android geometry.
+- iOS now supports the three text lines of `printSingleLabelWithGapDetection`
+  and reads the device address correctly on connect.
+- Android `minSdk` raised to 21 (SDK requirement).
+- `getPrinterStatus()` returns the decoded status map (`code`, `status`,
+  `description`, `ready`, `printing`, `error`).
+
+### Fixed
+- Removed non-TSPL commands (`CLEAR`, `GAPDETECT ON`, `AUTODETECT ON`) that
+  were sent before every print. Calibration is no longer triggered per job.
+- Removed `HOME` before each label and `FORMFEED` between series labels,
+  which each ejected a blank label.
+- Double quotes in text no longer break the TSPL command.
+- Legacy `printText` / `printBarcode` / `printQRCode` on Android crashed on
+  argument parsing.
+
+### Removed
+- Hand-rolled Bluetooth socket (Android) and CoreBluetooth (iOS) code,
+  replaced by the vendor SDKs.
+
 ## [2.0.0] - 2024-12-XX
 
 ### Added

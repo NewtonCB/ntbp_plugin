@@ -1,6 +1,6 @@
 name: ntbp_plugin
-description: "A comprehensive Flutter plugin for thermal Bluetooth label printing with advanced features including gap detection, precise positioning, and support for multiple label formats."
-version: 2.0.0
+description: "Thermal Bluetooth label printing for TSPL printers (Xprinter XP-420B, N41). Cargo shipment labels, QR labels, series printing with status feedback, and gap calibration on Android and iOS."
+version: 3.0.0
 homepage: https://github.com/NewtonCB/ntbp_plugin
 repository: https://github.com/NewtonCB/ntbp_plugin
 issue_tracker: https://github.com/NewtonCB/ntbp_plugin/issues

@@ -1,5 +1,5 @@
 group = "com.example.ntbp_plugin"
-version = "1.0-SNAPSHOT"
+version = "3.0.0"
 
 buildscript {
     ext.kotlin_version = "2.1.0"
@@ -14,10 +14,22 @@ buildscript {
     }
 }
 
+// The Xprinter SDK ships as a local Maven repository inside the plugin
+// (android/libs/repo). Gradle resolves a library's dependencies with the
+// consuming app's repositories, so the repository is registered on every
+// project of the build, not only on this module.
+def xprinterSdkRepo = file("${project.projectDir}/libs/repo").toURI()
+rootProject.allprojects {
+    repositories {
+        maven { url xprinterSdkRepo }
+    }
+}
+
 allprojects {
     repositories {
         google()
         mavenCentral()
+        maven { url xprinterSdkRepo }
     }
 }
 
@@ -44,10 +56,15 @@ android {
     }
 
     defaultConfig {
-        minSdk = 19
+        // The Xprinter printer-lib requires API 21.
+        minSdk = 21
     }
 
     dependencies {
+        // Xprinter / net.posprinter SDK (Bluetooth SPP transport, TSPL helpers,
+        // printer status query). Served from android/libs/repo.
+        implementation "net.posprinter:printer-lib:3.5.8"
+
         implementation "androidx.core:core-ktx:1.12.0"
         implementation "androidx.appcompat:appcompat:1.6.1"
         testImplementation("org.jetbrains.kotlin:kotlin-test")

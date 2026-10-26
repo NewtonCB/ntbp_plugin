@@ -4,26 +4,40 @@
 #
 Pod::Spec.new do |s|
   s.name             = 'ntbp_plugin'
-  s.version          = '0.0.1'
-  s.summary          = 'A new Flutter plugin project.'
+  s.version          = '3.0.0'
+  s.summary          = 'Thermal Bluetooth label printing for TSPL printers (Xprinter XP-420B, N41).'
   s.description      = <<-DESC
-A new Flutter plugin project.
+Flutter plugin for thermal Bluetooth label printing. Renders label layouts to
+TSPL and transports them through the Xprinter iOS PrinterSDK over BLE.
                        DESC
-  s.homepage         = 'http://example.com'
+  s.homepage         = 'https://github.com/NewtonCB/ntbp_plugin'
   s.license          = { :file => '../LICENSE' }
-  s.author           = { 'Your Company' => 'email@example.com' }
+  s.author           = { 'NTBP' => 'mobile@otapp.net' }
   s.source           = { :path => '.' }
-  s.source_files = 'Classes/**/*'
+  s.source_files     = 'Classes/**/*.{swift,h,m}'
+  s.public_header_files = 'Classes/ntbp_plugin.h', 'Classes/PrinterSDK/*.h'
+
+  # Xprinter PrinterSDK (Objective-C static library). Device slices only
+  # (arm64); the simulator is x86_64 only, so Apple-silicon simulators need
+  # Rosetta. Real devices are unaffected.
+  s.vendored_libraries = 'Libraries/libPrinterSDK.a'
+  s.preserve_paths   = 'Libraries/libPrinterSDK.a'
+  s.frameworks       = 'Foundation', 'UIKit', 'CoreBluetooth', 'ExternalAccessory', 'CFNetwork'
+  s.libraries        = 'z'
+
   s.dependency 'Flutter'
   s.platform = :ios, '12.0'
 
-  # Flutter.framework does not contain a i386 slice.
-  s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES', 'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386' }
+  s.pod_target_xcconfig = {
+    'DEFINES_MODULE' => 'YES',
+    'OTHER_LDFLAGS' => '-ObjC',
+    'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'arm64 i386',
+    'CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER' => 'NO'
+  }
+  s.user_target_xcconfig = {
+    'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'arm64 i386'
+  }
   s.swift_version = '5.0'
 
-  # If your plugin requires a privacy manifest, for example if it uses any
-  # required reason APIs, update the PrivacyInfo.xcprivacy file to describe your
-  # plugin's privacy impact, and then uncomment this line. For more information,
-  # see https://developer.apple.com/documentation/bundleresources/privacy_manifest_files
-  # s.resource_bundles = {'ntbp_plugin_privacy' => ['Resources/PrivacyInfo.xcprivacy']}
+  s.resource_bundles = {'ntbp_plugin_privacy' => ['Resources/PrivacyInfo.xcprivacy']}
 end

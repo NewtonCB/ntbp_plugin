@@ -321,5 +321,10 @@ abstract class NtbpPluginPlatform extends PlatformInterface {
     throw UnimplementedError('printWithProtocol() has not been implemented.');
   }
 
-
+  /// Ask the printer for its status byte (`ESC ! ?`). Returns the raw code,
+  /// -1 when the printer did not answer within [timeoutMs], -2 when not
+  /// connected. See `PrinterStatus` for the meaning of the bits.
+  Future<int> queryPrinterStatus({int timeoutMs = 2000}) {
+    throw UnimplementedError('queryPrinterStatus() has not been implemented.');
+  }
 }
