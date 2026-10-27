@@ -209,8 +209,9 @@ All methods in this section are `static` on `NtbpPlugin`.
 Content model for the 4" x 6" cargo label. Required: `bookingReference`, `item`, `sender`
 (list of up to 4 lines), `receiver` (list of up to 4 lines), `destination`, `weight`,
 `package`, `serviceType`, `date`, `trackingNumber`. Optional: `title` (default
-`CARGO SHIPMENT`), `qrData` (defaults to `trackingNumber`) and `*Caption` overrides for
-every heading. `toMap()` / `CargoLabel.fromMap()` round-trip JSON.
+`CARGO SHIPMENT`), `qrContent` (`CargoQrContent.summary` default: a readable shipment
+summary from `summaryText()`; `trackingNumber`; or `custom` with `qrData`) and `*Caption`
+overrides for every heading. `copyWith(...)` returns a modified copy. `toMap()` / `CargoLabel.fromMap()` round-trip JSON.
 
 ### 2. `LabelPrintConfig`
 

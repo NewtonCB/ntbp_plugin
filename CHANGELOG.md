@@ -26,6 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   direction and copies. `TsplBuilder` and `NtbpPlugin.sendTspl` for custom
   TSPL.
 - `NtbpPlugin.previewCargoLabel` returns the TSPL for a label without printing.
+- `CargoQrContent` (`summary` default, `trackingNumber`, `custom`) and
+  `CargoLabel.summaryText()`: the QR encodes a human readable shipment summary.
+- `CargoLabel.copyWith`.
+- Example app rewritten: printer status header, label form, editable and
+  reorderable label series, media settings, smooth_sheets printer picker.
 
 ### Changed
 - Label layouts are rendered to TSPL in Dart (`CargoLabelLayout`,

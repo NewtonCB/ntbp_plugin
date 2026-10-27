@@ -107,6 +107,27 @@ void main() {
     expect(job, contains(RegExp(r'TEXT \d+,\d+,"5",0,1,1,"CARGO SHIPMENT"')));
   });
 
+  test('QR encodes a readable summary by default', () {
+    final summary = sample.summaryText();
+    expect(summary, startsWith('CARGO SHIPMENT | BOOKING REFERENCE: BK-1025'));
+    expect(summary, contains('SENDER: Otapp Agency Limited, P.O. Box 1234'));
+    expect(summary, contains('TRACKING NO.: 123456789012'));
+    expect(sample.effectiveQrData, summary);
+
+    final job = CargoLabelLayout.buildJob(sample, const LabelPrintConfig());
+    final qr = RegExp(r'QRCODE (\d+),(\d+),M,(\d+),A,0,"([^"]*)"').firstMatch(job)!;
+    expect(qr.group(4), summary);
+    final cell = int.parse(qr.group(3)!);
+    expect(cell, greaterThanOrEqualTo(3));
+    // QR must stay inside the right column (ends at x=760 on the reference grid).
+    expect(int.parse(qr.group(1)!), greaterThan(300));
+
+    final trackingOnly = sample.copyWith(qrContent: CargoQrContent.trackingNumber);
+    expect(trackingOnly.effectiveQrData, '123456789012');
+    final custom = sample.copyWith(qrContent: CargoQrContent.custom, qrData: 'https://x.y/z');
+    expect(custom.effectiveQrData, 'https://x.y/z');
+  });
+
   test('copies and density flow into the job', () {
     final job = CargoLabelLayout.buildJob(
       sample,
@@ -157,6 +178,5 @@ void main() {
 }
 
 extension on CargoLabel {
-  CargoLabel copyWithTitle(String title) =>
-      CargoLabel.fromMap({...toMap(), 'title': title});
+  CargoLabel copyWithTitle(String title) => copyWith(title: title);
 }

@@ -45,8 +45,21 @@ Package name `ntbp_plugin`, Android package `com.example.ntbp_plugin`.
   `ios/Classes/PrinterSDK/*.h` (public headers → umbrella → visible to Swift), static lib in
   `ios/Libraries/libPrinterSDK.a` (`vendored_libraries`, `-ObjC`, `libz`, CoreBluetooth +
   ExternalAccessory + CFNetwork). Simulator: x86_64 only (arm64 excluded) → Rosetta on Apple silicon.
-- Example app: `_buildCargoSection` in `example/lib/main.dart` has Print Sample / Print 3 Labels /
-  Calibrate Gap / Printer Status buttons with width/height/gap fields.
+- QR payload: `CargoQrContent.summary` (default) → `CargoLabel.summaryText()` joined with " | "
+  (TSPL quoted strings cannot hold line breaks). QR cell min 3 dots so dense codes stay scannable;
+  version table covers up to v20.
+- Example app (rewritten 2026-10-26, `example/lib/`): `main.dart` (theme, `PrinterScope`),
+  `state/printer_controller.dart` (ChangeNotifier: scan with 1 s polling, connect, status, config,
+  labels list, series print), `screens/home_screen.dart` (status header, media summary, reorderable
+  label list, bottom print bar), `screens/label_form_screen.dart` (full CargoLabel form),
+  `screens/media_settings_screen.dart`, `sheets/device_sheet.dart` (smooth_sheets `ModalSheetRoute` +
+  `Sheet` printer picker), `widgets/printer_status_card.dart`, `widgets/label_card.dart`.
+  Deps: `smooth_sheets ^1.3.0`, `permission_handler`. `flutter_bluetooth_printer` removed (unused).
+  **iOS permission gotcha:** permission_handler_apple defaults `PERMISSION_BLUETOOTH` to 0, so
+  `Permission.bluetooth` always reads denied unless `example/ios/Podfile` post_install sets
+  `GCC_PREPROCESSOR_DEFINITIONS` to include `PERMISSION_BLUETOOTH=1` (done 2026-10-26).
+  Controller exposes `permission` (unknown/granted/denied/blocked), `checkPermissions()`,
+  `requestPermissions()` (opens app Settings when blocked); status card shows a Grant banner.
 - Verified 2026-10-26: `flutter test` (19 pass), `flutter build ios --no-codesign --debug` and
   `flutter build apk --debug` of the example both succeed. User's test iPhone: "Kim_Phone"
   (id 00008110-00092DC93C12401E), Runner signed with team D2TB893886.

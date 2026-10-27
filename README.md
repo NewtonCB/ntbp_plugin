@@ -60,7 +60,10 @@ dependencies:
 
 Android needs `minSdkVersion 21` or higher. On Android 12+ request `BLUETOOTH_SCAN` and
 `BLUETOOTH_CONNECT` at runtime (for example with `permission_handler`) before scanning.
-iOS needs `NSBluetoothAlwaysUsageDescription` in `Info.plist`. The bundled iOS library
+iOS needs `NSBluetoothAlwaysUsageDescription` in `Info.plist`. If you request the
+permission with `permission_handler`, also add `PERMISSION_BLUETOOTH=1` to
+`GCC_PREPROCESSOR_DEFINITIONS` in your Podfile's `post_install` block, otherwise the
+Bluetooth permission is compiled out and always reports "denied". The bundled iOS library
 has no Apple-silicon simulator slice, so use a real device or a Rosetta simulator.
 
 Then run:
@@ -111,7 +114,10 @@ const label = CargoLabel(
   serviceType: 'Standard',
   date: '2025-10-19',
   trackingNumber: '123456789012',
-  // qrData: defaults to trackingNumber
+  // qrContent: CargoQrContent.summary (default) encodes a readable shipment
+  // summary, so scanning the QR with any phone shows booking, item, sender,
+  // receiver, destination, weight, package, service, date and tracking.
+  // Use CargoQrContent.trackingNumber or CargoQrContent.custom + qrData instead.
 );
 
 // Media settings. Defaults are 100 x 150 mm, 203 dpi, 3 mm gap, 1 copy.
@@ -421,6 +427,8 @@ cd example && flutter run
 
 ### **Version 3.0.0**
 - Xprinter XP-420B support with the cargo shipment label layout
+- QR code encodes a readable shipment summary (configurable)
+- Example app: label form, editable series, smooth_sheets printer picker
 - Vendor SDK transports on Android (SPP) and iOS (BLE)
 - Printer status query, one-time gap calibration, series printing with error stop
 - Layouts rendered in Dart; identical output on both platforms

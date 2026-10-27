@@ -1,6 +1,19 @@
 import 'label_print_config.dart';
 import 'tspl_builder.dart';
 
+/// What the QR code on a [CargoLabel] encodes.
+enum CargoQrContent {
+  /// A human readable summary of the shipment (default). Any phone camera
+  /// shows it as text when scanned. See [CargoLabel.summaryText].
+  summary,
+
+  /// Only the tracking number.
+  trackingNumber,
+
+  /// The value of [CargoLabel.qrData] verbatim.
+  custom,
+}
+
 /// Content of a cargo shipment label.
 ///
 /// The layout (see [CargoLabelLayout]) is:
@@ -31,7 +44,12 @@ class CargoLabel {
   final String bookingReference;
   final String item;
 
-  /// QR code payload. Defaults to [trackingNumber] when null.
+  /// Selects what the QR code encodes. Defaults to [CargoQrContent.summary].
+  final CargoQrContent qrContent;
+
+  /// Custom QR payload, used when [qrContent] is [CargoQrContent.custom].
+  /// For backward compatibility a non-empty [qrData] with the default
+  /// [qrContent] is also used verbatim.
   final String? qrData;
 
   /// Sender block, first entry is normally the name. Up to four lines are
@@ -66,6 +84,7 @@ class CargoLabel {
     this.title = 'CARGO SHIPMENT',
     required this.bookingReference,
     required this.item,
+    this.qrContent = CargoQrContent.summary,
     this.qrData,
     required this.sender,
     required this.receiver,
@@ -87,8 +106,42 @@ class CargoLabel {
     this.trackingCaption = 'TRACKING NO.',
   });
 
-  String get effectiveQrData =>
-      (qrData == null || qrData!.isEmpty) ? trackingNumber : qrData!;
+  /// The text actually encoded in the QR code.
+  String get effectiveQrData {
+    switch (qrContent) {
+      case CargoQrContent.trackingNumber:
+        return trackingNumber;
+      case CargoQrContent.custom:
+        return (qrData == null || qrData!.isEmpty) ? trackingNumber : qrData!;
+      case CargoQrContent.summary:
+        if (qrData != null && qrData!.isNotEmpty) return qrData!;
+        return summaryText();
+    }
+  }
+
+  /// Human readable summary of the shipment, one field per line. This is
+  /// what a phone shows after scanning the QR code.
+  ///
+  /// TSPL cannot carry line breaks inside a quoted string, so when the text
+  /// is encoded for the printer the lines are joined with [separator].
+  String summaryText({String separator = ' | '}) {
+    String join(List<String> lines) =>
+        lines.where((l) => l.trim().isNotEmpty).map((l) => l.trim()).join(', ');
+    final parts = <String>[
+      title,
+      '$bookingReferenceCaption: $bookingReference',
+      '$itemCaption: $item',
+      if (sender.isNotEmpty) '$senderCaption: ${join(sender)}',
+      if (receiver.isNotEmpty) '$receiverCaption: ${join(receiver)}',
+      '$destinationCaption: $destination',
+      '$weightCaption: $weight',
+      '$packageCaption: $package',
+      '$serviceTypeCaption: $serviceType',
+      '$dateCaption: $date',
+      '$trackingCaption: $trackingNumber',
+    ];
+    return parts.map((p) => p.replaceAll('\n', ' ')).join(separator);
+  }
 
   factory CargoLabel.fromMap(Map<String, dynamic> map) {
     List<String> lines(dynamic value) {
@@ -101,6 +154,10 @@ class CargoLabel {
       title: map['title'] as String? ?? 'CARGO SHIPMENT',
       bookingReference: map['bookingReference'] as String? ?? '',
       item: map['item'] as String? ?? '',
+      qrContent: CargoQrContent.values.firstWhere(
+        (v) => v.name == map['qrContent'],
+        orElse: () => CargoQrContent.summary,
+      ),
       qrData: map['qrData'] as String?,
       sender: lines(map['sender']),
       receiver: lines(map['receiver']),
@@ -128,6 +185,7 @@ class CargoLabel {
         'title': title,
         'bookingReference': bookingReference,
         'item': item,
+        'qrContent': qrContent.name,
         'qrData': qrData,
         'sender': sender,
         'receiver': receiver,
@@ -148,6 +206,39 @@ class CargoLabel {
         'dateCaption': dateCaption,
         'trackingCaption': trackingCaption,
       };
+
+  CargoLabel copyWith({
+    String? title,
+    String? bookingReference,
+    String? item,
+    CargoQrContent? qrContent,
+    String? qrData,
+    List<String>? sender,
+    List<String>? receiver,
+    String? destination,
+    String? weight,
+    String? package,
+    String? serviceType,
+    String? date,
+    String? trackingNumber,
+  }) {
+    return CargoLabel.fromMap({
+      ...toMap(),
+      if (title != null) 'title': title,
+      if (bookingReference != null) 'bookingReference': bookingReference,
+      if (item != null) 'item': item,
+      if (qrContent != null) 'qrContent': qrContent.name,
+      if (qrData != null) 'qrData': qrData,
+      if (sender != null) 'sender': sender,
+      if (receiver != null) 'receiver': receiver,
+      if (destination != null) 'destination': destination,
+      if (weight != null) 'weight': weight,
+      if (package != null) 'package': package,
+      if (serviceType != null) 'serviceType': serviceType,
+      if (date != null) 'date': date,
+      if (trackingNumber != null) 'trackingNumber': trackingNumber,
+    });
+  }
 
   @override
   String toString() =>
@@ -200,7 +291,7 @@ class CargoLabelLayout {
     final qrData = label.effectiveQrData;
     final qrModules = _qrModules(qrData);
     final qrTarget = y(236);
-    final cell = (qrTarget ~/ qrModules).clamp(2, 10);
+    final cell = (qrTarget ~/ qrModules).clamp(3, 10);
     final qrSize = cell * qrModules;
     final qrX = x(right) - qrSize;
     b.qrCode(qrX, y(136), qrData, ecLevel: 'M', cellWidth: cell);
@@ -362,7 +453,10 @@ class CargoLabelLayout {
   /// byte mode at error correction level M. Byte mode is the conservative
   /// choice, so the real symbol is never larger than estimated.
   static int _qrModules(String data) {
-    const capacities = [14, 26, 42, 62, 84, 106, 122, 152, 180, 213, 251, 287];
+    const capacities = [
+      14, 26, 42, 62, 84, 106, 122, 152, 180, 213, // v1..v10
+      251, 287, 331, 362, 412, 450, 504, 560, 624, 666, // v11..v20
+    ];
     final bytes = data.codeUnits.length;
     for (var v = 0; v < capacities.length; v++) {
       if (bytes <= capacities[v]) return 17 + 4 * (v + 1);
