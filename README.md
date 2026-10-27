@@ -51,6 +51,9 @@ Flutter plugin for thermal Bluetooth label printing on TSPL printers such as the
 
 ## 📦 **Installation**
 
+For a full walkthrough (Android/iOS setup, permissions, connecting, printing a series,
+status, troubleshooting) see **[doc/INTEGRATION_GUIDE.md](doc/INTEGRATION_GUIDE.md)**.
+
 Add this to your package's `pubspec.yaml` file:
 
 ```yaml
@@ -58,8 +61,12 @@ dependencies:
   ntbp_plugin: ^3.0.0
 ```
 
-Android needs `minSdkVersion 21` or higher. On Android 12+ request `BLUETOOTH_SCAN` and
-`BLUETOOTH_CONNECT` at runtime (for example with `permission_handler`) before scanning.
+Android needs `minSdkVersion 21` or higher. The plugin declares the Bluetooth permissions in
+its manifest and can request them itself: call `NtbpPlugin().requestBluetoothPermissions()`
+before scanning or connecting. It shows the system dialog for exactly what the running OS
+version needs (`BLUETOOTH_SCAN` and `BLUETOOTH_CONNECT` on Android 12+, fine location on
+older versions) and resolves `true` once granted. `hasBluetoothPermissions()` checks without
+prompting. No extra permission package is required on Android.
 iOS needs `NSBluetoothAlwaysUsageDescription` in `Info.plist`. If you request the
 permission with `permission_handler`, also add `PERMISSION_BLUETOOTH=1` to
 `GCC_PREPROCESSOR_DEFINITIONS` in your Podfile's `post_install` block, otherwise the

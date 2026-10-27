@@ -9,7 +9,7 @@ Welcome to the comprehensive documentation for the NTBP Plugin - a Flutter therm
 - **[RELEASE_PREPARATION.md](RELEASE_PREPARATION.md)** - Guide for preparing the plugin for release
 
 ### **📖 User Guides**
-- **[INTEGRATION_GUIDE.md](INTEGRATION_GUIDE.md)** - Step-by-step integration instructions
+- **[INTEGRATION_GUIDE.md](INTEGRATION_GUIDE.md)** - Step-by-step integration (install, permissions, connect, print, series, status, troubleshooting) for 3.x
 - **[UI_IMPLEMENTATION_GUIDE.md](UI_IMPLEMENTATION_GUIDE.md)** - UI framework examples and patterns
 - **[LABEL_PRINTING_FLOW.md](LABEL_PRINTING_FLOW.md)** - Detailed printing process documentation
 
@@ -19,7 +19,7 @@ Welcome to the comprehensive documentation for the NTBP Plugin - a Flutter therm
 
 ### **👨‍💻 Developer Resources**
 - **[DEVELOPMENT.md](DEVELOPMENT.md)** - Contributing and development setup
-- **[COMPREHENSIVE_INTEGRATION_GUIDE.md](COMPREHENSIVE_INTEGRATION_GUIDE.md)** - Advanced integration patterns
+- **[COMPREHENSIVE_INTEGRATION_GUIDE.md](COMPREHENSIVE_INTEGRATION_GUIDE.md)** - Advanced integration patterns (written for 2.x; see INTEGRATION_GUIDE.md for the 3.x API)
 
 ## 📖 **Reading Order**
 

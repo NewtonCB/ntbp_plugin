@@ -1,6 +1,7 @@
 package com.example.ntbp_plugin
 
 import android.Manifest
+import android.app.Activity
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
@@ -13,8 +14,12 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.engine.plugins.FlutterPlugin
+import io.flutter.embedding.engine.plugins.activity.ActivityAware
+import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
+import io.flutter.plugin.common.PluginRegistry
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
@@ -36,9 +41,14 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Bluetooth SPP), and the printer status query. Label layouts are rendered to
  * TSPL on the Dart side and arrive here as raw bytes via `sendProtocolCommands`.
  */
-class NtbpPlugin : FlutterPlugin, MethodCallHandler {
+class NtbpPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
+  PluginRegistry.RequestPermissionsResultListener {
   private lateinit var channel: MethodChannel
   private lateinit var context: Context
+
+  private var activity: Activity? = null
+  private var activityBinding: ActivityPluginBinding? = null
+  private var pendingPermissionResult: Result? = null
   private var bluetoothAdapter: BluetoothAdapter? = null
   private val discoveredDevices = ConcurrentHashMap<String, BluetoothDevice>()
   private var discoveryReceiver: BroadcastReceiver? = null
@@ -59,6 +69,42 @@ class NtbpPlugin : FlutterPlugin, MethodCallHandler {
     private const val SCAN_WINDOW_MS = 12_000L
     private const val CONNECT_TIMEOUT_MS = 20_000L
     private const val WRITE_TIMEOUT_MS = 30_000L
+    private const val PERMISSION_REQUEST_CODE = 0x4E54 // "NT"
+  }
+
+  // ===========================================================================
+  // Activity (needed to show the runtime permission dialog)
+  // ===========================================================================
+
+  override fun onAttachedToActivity(binding: ActivityPluginBinding) {
+    activity = binding.activity
+    activityBinding = binding
+    binding.addRequestPermissionsResultListener(this)
+  }
+
+  override fun onDetachedFromActivityForConfigChanges() = onDetachedFromActivity()
+
+  override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) =
+    onAttachedToActivity(binding)
+
+  override fun onDetachedFromActivity() {
+    activityBinding?.removeRequestPermissionsResultListener(this)
+    activityBinding = null
+    activity = null
+  }
+
+  override fun onRequestPermissionsResult(
+    requestCode: Int,
+    permissions: Array<out String>,
+    grantResults: IntArray
+  ): Boolean {
+    if (requestCode != PERMISSION_REQUEST_CODE) return false
+    val pending = pendingPermissionResult ?: return true
+    pendingPermissionResult = null
+    val granted = missingBluetoothPermissions().isEmpty()
+    Log.d(TAG, "Permission request finished, granted=$granted")
+    pending.success(granted)
+    return true
   }
 
   // ===========================================================================
@@ -114,7 +160,8 @@ class NtbpPlugin : FlutterPlugin, MethodCallHandler {
 
         // --- Bluetooth -----------------------------------------------------
         "isBluetoothAvailable" -> result.success(isBluetoothAvailable())
-        "requestBluetoothPermissions" -> result.success(hasBluetoothPermissions())
+        "hasBluetoothPermissions" -> result.success(hasBluetoothPermissions())
+        "requestBluetoothPermissions" -> requestBluetoothPermissions(result)
         "checkDevicePairingStatus" -> {
           result.success(checkDevicePairingStatus(call.argument<String>("address") ?: ""))
         }
@@ -242,14 +289,49 @@ class NtbpPlugin : FlutterPlugin, MethodCallHandler {
     return try { adapter.isEnabled } catch (_: Exception) { false }
   }
 
-  private fun hasBluetoothPermissions(): Boolean {
-    fun granted(p: String) =
-      ContextCompat.checkSelfPermission(context, p) == PackageManager.PERMISSION_GRANTED
-    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-      granted(Manifest.permission.BLUETOOTH_SCAN) && granted(Manifest.permission.BLUETOOTH_CONNECT)
+  /**
+   * Runtime permissions this plugin needs on the running Android version.
+   * Android 12+: BLUETOOTH_SCAN (declared neverForLocation) and
+   * BLUETOOTH_CONNECT. Older versions: fine location, which classic
+   * Bluetooth discovery requires there.
+   */
+  private fun requiredBluetoothPermissions(): List<String> =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      listOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
     } else {
-      granted(Manifest.permission.ACCESS_FINE_LOCATION)
+      listOf(Manifest.permission.ACCESS_FINE_LOCATION)
     }
+
+  private fun missingBluetoothPermissions(): List<String> =
+    requiredBluetoothPermissions().filter {
+      ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+    }
+
+  private fun hasBluetoothPermissions(): Boolean = missingBluetoothPermissions().isEmpty()
+
+  /**
+   * Shows the system permission dialog for whatever is still missing and
+   * answers true once everything is granted. Needs a foreground Activity.
+   */
+  private fun requestBluetoothPermissions(result: Result) {
+    val missing = missingBluetoothPermissions()
+    if (missing.isEmpty()) {
+      result.success(true)
+      return
+    }
+    val act = activity
+    if (act == null) {
+      result.error("NO_ACTIVITY",
+        "Cannot show the Bluetooth permission dialog without a foreground Activity", null)
+      return
+    }
+    pendingPermissionResult?.let {
+      pendingPermissionResult = null
+      it.success(false)
+    }
+    pendingPermissionResult = result
+    Log.d(TAG, "Requesting permissions: $missing")
+    ActivityCompat.requestPermissions(act, missing.toTypedArray(), PERMISSION_REQUEST_CODE)
   }
 
   private fun startScan(result: Result) {
@@ -260,8 +342,8 @@ class NtbpPlugin : FlutterPlugin, MethodCallHandler {
     }
     if (!hasBluetoothPermissions()) {
       result.error("PERMISSION_DENIED",
-        "Bluetooth permissions not granted. Request BLUETOOTH_SCAN/BLUETOOTH_CONNECT " +
-          "(Android 12+) or ACCESS_FINE_LOCATION before scanning.", null)
+        "Bluetooth permissions not granted (${missingBluetoothPermissions().joinToString()}). " +
+          "Call requestBluetoothPermissions() first.", null)
       return
     }
 
@@ -374,6 +456,14 @@ class NtbpPlugin : FlutterPlugin, MethodCallHandler {
   private fun connectToDevice(address: String, name: String?, result: Result) {
     if (!isBluetoothAvailable()) {
       result.error("BLUETOOTH_NOT_AVAILABLE", "Bluetooth is not available or not enabled.", null)
+      return
+    }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+      ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) !=
+      PackageManager.PERMISSION_GRANTED
+    ) {
+      result.error("PERMISSION_DENIED",
+        "BLUETOOTH_CONNECT not granted. Call requestBluetoothPermissions() first.", null)
       return
     }
     try { bluetoothAdapter?.cancelDiscovery() } catch (_: Exception) {}

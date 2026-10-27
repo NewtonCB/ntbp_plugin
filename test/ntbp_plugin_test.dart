@@ -16,6 +16,9 @@ class MockNtbpPluginPlatform
   Future<bool> requestBluetoothPermissions() => Future.value(true);
 
   @override
+  Future<bool> hasBluetoothPermissions() => Future.value(true);
+
+  @override
   Future<void> startScan() => Future.value();
 
   @override

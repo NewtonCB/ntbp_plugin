@@ -58,8 +58,9 @@ public class NtbpPlugin: NSObject, FlutterPlugin, XBLEManagerDelegate {
         // --- Bluetooth -----------------------------------------------------
         case "isBluetoothAvailable":
             result(isBluetoothAvailable())
-        case "requestBluetoothPermissions":
-            // iOS shows the permission prompt on first CoreBluetooth use.
+        case "hasBluetoothPermissions", "requestBluetoothPermissions":
+            // iOS shows the permission prompt on first CoreBluetooth use,
+            // which the SDK's central manager triggers at startup.
             result(bluetoothState != CBManagerState.unauthorized.rawValue)
         case "checkDevicePairingStatus":
             // BLE peripherals do not expose bond state; pairing happens on

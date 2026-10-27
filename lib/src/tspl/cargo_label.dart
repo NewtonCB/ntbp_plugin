@@ -305,7 +305,6 @@ class CargoLabelLayout {
     const left = 40;
     const right = 760;
     const contentWidth = right - left;
-    const centreX = (left + right) / 2;
     final thickness = (3 * sx).round().clamp(2, 6);
     const captionFont = TsplFont.f12x20;
 

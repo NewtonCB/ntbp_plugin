@@ -34,9 +34,18 @@ abstract class NtbpPluginPlatform extends PlatformInterface {
     throw UnimplementedError('isBluetoothAvailable() has not been implemented.');
   }
 
-  /// Request Bluetooth permissions
+  /// Request Bluetooth permissions. On Android this shows the system dialog
+  /// for whatever is missing (BLUETOOTH_SCAN and BLUETOOTH_CONNECT on
+  /// Android 12+, fine location before that) and resolves true once all are
+  /// granted. On iOS the prompt is shown by the system on first use.
   Future<bool> requestBluetoothPermissions() {
     throw UnimplementedError('requestBluetoothPermissions() has not been implemented.');
+  }
+
+  /// Whether every Bluetooth permission the plugin needs is granted, without
+  /// prompting.
+  Future<bool> hasBluetoothPermissions() {
+    throw UnimplementedError('hasBluetoothPermissions() has not been implemented.');
   }
 
   /// Check device pairing status

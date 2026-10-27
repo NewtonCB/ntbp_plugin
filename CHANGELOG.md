@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Vendor SDK transports.** Android uses the Xprinter `printer-lib` (classic
   Bluetooth SPP), iOS uses the Xprinter `PrinterSDK` (BLE). Both are bundled
   in the plugin.
+- **Android runtime permissions inside the plugin.**
+  `requestBluetoothPermissions()` shows the system dialog (via `ActivityAware`)
+  and `hasBluetoothPermissions()` checks silently. `connectToDevice` fails fast
+  with `PERMISSION_DENIED` when `BLUETOOTH_CONNECT` is missing.
 - **Printer status query** (`NtbpPlugin.queryPrinterStatus`, `PrinterStatus`):
   ready, head open, paper jam, out of paper, paused, printing.
 - **Gap calibration** (`NtbpPlugin.calibrateGap`, `autoCalibrate`,

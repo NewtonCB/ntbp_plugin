@@ -31,6 +31,12 @@ class MethodChannelNtbpPlugin extends NtbpPluginPlatform {
   }
 
   @override
+  Future<bool> hasBluetoothPermissions() async {
+    final result = await methodChannel.invokeMethod<bool>('hasBluetoothPermissions');
+    return result ?? false;
+  }
+
+  @override
   Future<String> checkDevicePairingStatus(String address) async {
     final result = await methodChannel.invokeMethod<String>('checkDevicePairingStatus', {
       'address': address,

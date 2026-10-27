@@ -47,6 +47,12 @@ Package name `ntbp_plugin`, Android package `com.example.ntbp_plugin`.
 - Native channel methods actually used now: scan/connect/disconnect/isConnected/status maps,
   `sendProtocolCommands` (raw bytes), `queryPrinterStatus(timeoutMs)` → int, plus simple legacy
   printText/printBarcode/printQRCode/print/clearBuffer/feedPaper which build tiny TSPL natively.
+- Android permissions (fixed 2026-10-28): plugin is `ActivityAware` +
+  `RequestPermissionsResultListener`; `requestBluetoothPermissions` prompts via
+  `ActivityCompat.requestPermissions` for the SDK-appropriate set (S+: BLUETOOTH_SCAN+CONNECT, else
+  ACCESS_FINE_LOCATION), request code 0x4E54, resolves once; `hasBluetoothPermissions` checks.
+  `startScan`/`connectToDevice` return `PERMISSION_DENIED` early. Example controller uses the plugin as
+  the authority on Android and permission_handler only to detect "blocked" (permanently denied).
 - Android native: `POSConnect.init` in onAttachedToEngine, `IDeviceConnection` (SPP by MAC) with
   `IConnectListener`, `sendData` on a single-thread executor, `TSPLPrinter(conn).printerStatus(timeout)`.
   Discovery still uses `BluetoothAdapter` (bonded + discovery, BLE-only devices skipped). The aar is

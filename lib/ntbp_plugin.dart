@@ -449,9 +449,18 @@ class NtbpPlugin {
     return _platform.isBluetoothAvailable();
   }
 
-  /// Request Bluetooth permissions
+  /// Shows the system Bluetooth permission dialog if anything is missing and
+  /// resolves true once all required permissions are granted. On Android
+  /// 12+ that is BLUETOOTH_SCAN and BLUETOOTH_CONNECT; on older Android it
+  /// is fine location (needed for classic Bluetooth discovery). Call this
+  /// before [startScan] or [connectToDevice].
   Future<bool> requestBluetoothPermissions() {
     return _platform.requestBluetoothPermissions();
+  }
+
+  /// Whether all Bluetooth permissions are already granted (no prompt).
+  Future<bool> hasBluetoothPermissions() {
+    return _platform.hasBluetoothPermissions();
   }
 
   /// Check device pairing status

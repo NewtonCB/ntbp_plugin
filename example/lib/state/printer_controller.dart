@@ -106,21 +106,43 @@ class PrinterController extends ChangeNotifier {
   }
 
   /// Reads the current permission state without prompting.
+  ///
+  /// On Android the plugin itself is the authority: it knows which runtime
+  /// permissions the running OS version needs. permission_handler is only
+  /// consulted to tell "denied" from "blocked" (user chose "Don't ask again").
   Future<BluetoothPermission> checkPermissions() async {
-    final wanted = _wantedPermissions;
-    if (wanted.isEmpty) {
-      permission = BluetoothPermission.granted;
-      notifyListeners();
-      return permission;
-    }
     try {
-      final statuses = await Future.wait(wanted.map((p) => p.status));
-      permission = _fold(statuses);
+      if (Platform.isAndroid) {
+        if (await _plugin.hasBluetoothPermissions()) {
+          permission = BluetoothPermission.granted;
+        } else {
+          permission = await _androidDeniedOrBlocked();
+        }
+      } else {
+        final wanted = _wantedPermissions;
+        if (wanted.isEmpty) {
+          permission = BluetoothPermission.granted;
+        } else {
+          final statuses = await Future.wait(wanted.map((p) => p.status));
+          permission = _fold(statuses);
+        }
+      }
     } catch (e) {
       _say('Could not read permission state: $e');
     }
     notifyListeners();
     return permission;
+  }
+
+  Future<BluetoothPermission> _androidDeniedOrBlocked() async {
+    try {
+      final statuses = await Future.wait(
+        [Permission.bluetoothScan, Permission.bluetoothConnect, Permission.locationWhenInUse]
+            .map((p) => p.status),
+      );
+      if (statuses.any((s) => s.isPermanentlyDenied)) return BluetoothPermission.blocked;
+    } catch (_) {}
+    return BluetoothPermission.denied;
   }
 
   /// Shows the system permission prompt. When the OS no longer allows the
@@ -131,13 +153,19 @@ class PrinterController extends ChangeNotifier {
     requestingPermission = true;
     notifyListeners();
     try {
-      final wanted = _wantedPermissions;
-      if (wanted.isEmpty) {
-        permission = BluetoothPermission.granted;
-        return true;
+      if (Platform.isAndroid) {
+        // The plugin shows the system dialog for exactly what the OS needs.
+        final ok = await _plugin.requestBluetoothPermissions();
+        permission = ok ? BluetoothPermission.granted : await _androidDeniedOrBlocked();
+      } else {
+        final wanted = _wantedPermissions;
+        if (wanted.isEmpty) {
+          permission = BluetoothPermission.granted;
+          return true;
+        }
+        final results = await wanted.request();
+        permission = _fold(results.values);
       }
-      final results = await wanted.request();
-      permission = _fold(results.values);
 
       if (permission == BluetoothPermission.granted) {
         _say('Bluetooth permission granted');
@@ -228,6 +256,7 @@ class PrinterController extends ChangeNotifier {
 
   Future<bool> connect(BluetoothDevice device) async {
     if (connecting) return false;
+    if (!await ensurePermissions()) return false;
     connecting = true;
     connectionError = null;
     notifyListeners();

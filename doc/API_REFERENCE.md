@@ -45,6 +45,13 @@ if (isAvailable) {
 
 ### 2. Permission Management
 
+`requestBluetoothPermissions()` (instance method) shows the Android system dialog for the
+permissions the plugin needs on the running OS version and resolves `true` once all are
+granted; it needs a foreground Activity (`NO_ACTIVITY` otherwise). `hasBluetoothPermissions()`
+checks without prompting. On iOS both reflect the CoreBluetooth authorization state; the
+system prompt appears automatically on first use. `startScan` and `connectToDevice` fail with
+`PERMISSION_DENIED` when a permission is missing.
+
 #### `requestBluetoothPermissions()`
 Request all necessary Bluetooth permissions from the user.
 
