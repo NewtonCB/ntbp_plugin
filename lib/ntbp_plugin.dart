@@ -6,6 +6,8 @@ export 'models/printer_status.dart';
 export 'src/protocols.dart';
 export 'src/tspl.dart';
 
+import 'dart:convert';
+
 import 'ntbp_plugin_platform_interface.dart';
 import 'models/bluetooth_device.dart';
 import 'models/print_command.dart';
@@ -13,6 +15,7 @@ import 'models/printer_status.dart';
 import 'src/protocols/protocol_manager.dart';
 import 'src/tspl/cargo_label.dart';
 import 'src/tspl/label_print_config.dart';
+import 'src/tspl/logo_bitmap.dart';
 import 'src/tspl/three_line_label.dart';
 import 'src/tspl/tspl_builder.dart';
 
@@ -39,8 +42,9 @@ class NtbpPlugin {
   static Future<bool> printCargoLabel(
     CargoLabel label, {
     LabelPrintConfig config = const LabelPrintConfig(),
+    CargoLogo? logo,
   }) {
-    return sendTspl(CargoLabelLayout.buildJob(label, config));
+    return sendTspl(CargoLabelLayout.buildJob(label, config, logo: logo));
   }
 
   /// Prints a series of cargo labels back to back.
@@ -52,24 +56,27 @@ class NtbpPlugin {
   static Future<PrintBatchResult> printCargoLabels(
     List<CargoLabel> labels, {
     LabelPrintConfig config = const LabelPrintConfig(),
+    CargoLogo? logo,
     bool waitForPrinter = true,
     Duration perLabelTimeout = const Duration(seconds: 15),
   }) {
     return _printSeries(
-      labels.map((l) => CargoLabelLayout.buildJob(l, config)).toList(),
+      labels.map((l) => CargoLabelLayout.buildJob(l, config, logo: logo)).toList(),
       config: config,
       waitForPrinter: waitForPrinter,
       perLabelTimeout: perLabelTimeout,
     );
   }
 
-  /// Returns the TSPL that [printCargoLabel] would send. Handy for debugging
-  /// a layout without a printer.
+  /// Returns the TSPL that [printCargoLabel] would send, with binary logo
+  /// data replaced by a placeholder. Handy for debugging a layout without a
+  /// printer.
   static String previewCargoLabel(
     CargoLabel label, {
     LabelPrintConfig config = const LabelPrintConfig(),
+    CargoLogo? logo,
   }) {
-    return CargoLabelLayout.buildJob(label, config);
+    return TsplBuilder.makeReadable(CargoLabelLayout.buildJob(label, config, logo: logo));
   }
 
   // ===========================================================================
@@ -79,7 +86,7 @@ class NtbpPlugin {
   /// Sends a TSPL script verbatim. Lines should end with CRLF; [TsplBuilder]
   /// produces the right format.
   static Future<bool> sendTspl(String script) {
-    return _platform.sendProtocolCommands(script.codeUnits, 'TSPL');
+    return _platform.sendProtocolCommands(latin1.encode(script), 'TSPL');
   }
 
   /// Sends raw bytes to the printer.

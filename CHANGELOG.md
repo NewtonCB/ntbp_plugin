@@ -28,11 +28,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `NtbpPlugin.previewCargoLabel` returns the TSPL for a label without printing.
 - `CargoQrContent` (`summary` default, `trackingNumber`, `custom`) and
   `CargoLabel.summaryText()`: the QR encodes a human readable shipment summary.
-- `CargoLabel.copyWith`.
+- `CargoLabel.copyWith`, `CargoLabel.generateReference` (e.g. `BK-1025` + 1 →
+  `BK1025-001`).
+- `CargoLabel.brandName`, printed top left opposite the logo.
+- `CargoLogo` / `MonoBitmap`: decode a PNG/JPEG logo once, print it at the
+  top right of the label via TSPL `BITMAP` (`logo:` on `printCargoLabel`,
+  `printCargoLabels`, `previewCargoLabel`). Depends on `image`.
+- `TsplBuilder.bitmap`, `TsplBuilder.makeReadable`.
 - Example app rewritten: printer status header, label form, editable and
   reorderable label series, media settings, smooth_sheets printer picker.
 
 ### Changed
+- Cargo label structure: the title band is replaced by the logo, sender and
+  receiver hold name and phone only, `serviceType` became `source`, and the
+  bottom box shows `cargoName` (no barcode, no tracking number). `fromMap`
+  still reads `serviceType`.
 - Label layouts are rendered to TSPL in Dart (`CargoLabelLayout`,
   `ThreeLineQrLayout`). Android and iOS now print identical output; the native
   code only transports bytes. The three-line QR label is a faithful port of
@@ -51,6 +61,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Double quotes in text no longer break the TSPL command.
 - Legacy `printText` / `printBarcode` / `printQRCode` on Android crashed on
   argument parsing.
+- Raw command bytes cross the channel as typed data; empty payloads are
+  reported as `EMPTY_PAYLOAD` instead of a silent success.
 
 ### Removed
 - Hand-rolled Bluetooth socket (Android) and CoreBluetooth (iOS) code,

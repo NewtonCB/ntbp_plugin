@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter/widgets.dart';
 import 'package:ntbp_plugin/ntbp_plugin.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -38,12 +39,40 @@ class PrinterController extends ChangeNotifier {
   LabelPrintConfig config = const LabelPrintConfig(density: 10);
   final List<CargoLabel> labels = [];
 
+  /// Logo printed at the top of every label. Loaded from the app bundle;
+  /// replace with [setLogo] to use another image.
+  CargoLogo? logo;
+  bool printLogo = true;
+
   String? lastMessage;
 
   PrinterController() {
     loadSampleLabels();
     checkPermissions();
+    _loadBundledLogo();
   }
+
+  Future<void> _loadBundledLogo() async {
+    try {
+      final data = await rootBundle.load('assets/logo.png');
+      logo = CargoLogo.fromBytes(data.buffer.asUint8List());
+    } catch (e) {
+      debugPrint('[NTBP] logo not loaded: $e');
+    }
+    notifyListeners();
+  }
+
+  void setLogo(CargoLogo? value) {
+    logo = value;
+    notifyListeners();
+  }
+
+  void setPrintLogo(bool value) {
+    printLogo = value;
+    notifyListeners();
+  }
+
+  CargoLogo? get _activeLogo => printLogo ? logo : null;
 
   bool get isConnected => connected != null;
 
@@ -299,7 +328,7 @@ class PrinterController extends ChangeNotifier {
     printingIndex = labels.indexOf(label);
     notifyListeners();
     try {
-      final ok = await NtbpPlugin.printCargoLabel(label, config: config);
+      final ok = await NtbpPlugin.printCargoLabel(label, config: config, logo: _activeLogo);
       _say(ok ? 'Sent ${label.bookingReference} to the printer' : 'Print failed');
       return ok;
     } catch (e) {
@@ -323,6 +352,7 @@ class PrinterController extends ChangeNotifier {
       final result = await NtbpPlugin.printCargoLabels(
         List.of(labels),
         config: config,
+        logo: _activeLogo,
       );
       lastBatch = result;
       if (result.success) {
@@ -374,7 +404,7 @@ class PrinterController extends ChangeNotifier {
     if (index < 0 || index >= labels.length) return;
     final src = labels[index];
     labels.insert(index + 1, src.copyWith(
-      item: _bumpPackage(src.item, labels.length + 1),
+      item: CargoLabel.generateReference(src.bookingReference, labels.length + 1),
       package: _bumpPackage(src.package, labels.length + 1),
     ));
     notifyListeners();
@@ -402,26 +432,17 @@ class PrinterController extends ChangeNotifier {
 
   static CargoLabel sampleLabel({int index = 1, int total = 1}) {
     return CargoLabel(
+      brandName: 'BM Coach',
       bookingReference: 'BK-1025',
-      item: 'ITEM-${index.toString().padLeft(3, '0')} / $total',
-      sender: const [
-        'Otapp Agency Limited',
-        'P.O. Box 1234',
-        'Dar es Salaam, Tanzania',
-        'Tel: +255 712 345 678',
-      ],
-      receiver: const [
-        'John Mwakyusa',
-        'P.O. Box 5678',
-        'Kinondoni, Dar es Salaam',
-        'Tel: +255 765 432 109',
-      ],
+      item: CargoLabel.generateReference('BK-1025', index),
+      cargoName: const ['Spare parts (engine)', 'Cartons of textiles', 'Solar panels, 2 pcs'][(index - 1) % 3],
+      sender: const ['Otapp Agency Limited', 'Tel: +255 712 345 678'],
+      receiver: const ['John Mwakyusa', 'Tel: +255 765 432 109'],
       destination: 'DAR ES SALAAM',
       weight: '5.0 KG',
       package: '$index / $total',
-      serviceType: 'Standard',
+      source: 'MWANZA',
       date: '2025-10-19',
-      trackingNumber: '12345678901$index',
     );
   }
 

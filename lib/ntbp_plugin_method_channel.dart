@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
@@ -449,8 +450,10 @@ class MethodChannelNtbpPlugin extends NtbpPluginPlatform {
   // NEW: Protocol system methods that connect to native code
   @override
   Future<bool> sendProtocolCommands(List<int> commands, String protocolName) async {
+    // A Uint8List crosses the channel as binary typed data, which is far
+    // cheaper than a List<int> for multi-kilobyte jobs with logo bitmaps.
     final result = await methodChannel.invokeMethod<bool>('sendProtocolCommands', {
-      'commands': commands,
+      'commands': commands is Uint8List ? commands : Uint8List.fromList(commands),
       'protocolName': protocolName,
     });
     return result ?? false;

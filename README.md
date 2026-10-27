@@ -98,42 +98,51 @@ bool connected = await NtbpPlugin.connectToDevice(devices.first);
 
 ### **3. Print a Cargo Shipment Label (XP-420B)**
 
-The layout matches a 100 x 150 mm (4" x 6") shipping label: title, booking reference and
-item with a QR code, sender and receiver boxes, destination / weight / package,
-service type / date, and a Code 128 tracking barcode.
+The layout fits a 100 x 150 mm (4" x 6") label: brand name top left and logo top right, booking
+reference and item reference with a QR code, sender and receiver (name and phone),
+destination / weight / package, source / date, and the cargo name in a box at the
+bottom.
 
 ```dart
-const label = CargoLabel(
+// Decode the logo once and reuse it for every label.
+final bytes = await rootBundle.load('assets/logo.png');
+final logo = CargoLogo.fromBytes(bytes.buffer.asUint8List());
+
+final label = CargoLabel(
+  brandName: 'BM Coach',
   bookingReference: 'BK-1025',
-  item: 'ITEM-001 / 5',
-  sender: ['Otapp Agency Limited', 'P.O. Box 1234', 'Dar es Salaam, Tanzania', 'Tel: +255 712 345 678'],
-  receiver: ['John Mwakyusa', 'P.O. Box 5678', 'Kinondoni, Dar es Salaam', 'Tel: +255 765 432 109'],
+  item: CargoLabel.generateReference('BK-1025', 1), // BK1025-001
+  cargoName: 'Spare parts (engine)',
+  sender: ['Otapp Agency Limited', 'Tel: +255 712 345 678'],
+  receiver: ['John Mwakyusa', 'Tel: +255 765 432 109'],
+  source: 'MWANZA',
   destination: 'DAR ES SALAAM',
   weight: '5.0 KG',
   package: '1 / 5',
-  serviceType: 'Standard',
   date: '2025-10-19',
-  trackingNumber: '123456789012',
   // qrContent: CargoQrContent.summary (default) encodes a readable shipment
-  // summary, so scanning the QR with any phone shows booking, item, sender,
-  // receiver, destination, weight, package, service, date and tracking.
-  // Use CargoQrContent.trackingNumber or CargoQrContent.custom + qrData instead.
+  // summary, so scanning the QR with any phone shows all the details.
 );
 
 // Media settings. Defaults are 100 x 150 mm, 203 dpi, 3 mm gap, 1 copy.
 const config = LabelPrintConfig(gapMm: 3, density: 10);
 
-bool ok = await NtbpPlugin.printCargoLabel(label, config: config);
+bool ok = await NtbpPlugin.printCargoLabel(label, config: config, logo: logo);
 ```
 
 Print a series. The plugin polls the printer between labels and stops at the first
 error (out of paper, head open, jam) so nothing is lost in the buffer:
 
 ```dart
-final result = await NtbpPlugin.printCargoLabels(labels, config: config);
+final result = await NtbpPlugin.printCargoLabels(labels, config: config, logo: logo);
 print('${result.printed}/${result.total} printed, failed: ${result.failedIndexes}');
 if (result.stoppedBy != null) print(result.stoppedBy!.description);
 ```
+
+`CargoLogo` accepts PNG, JPEG, GIF, BMP and WebP. Colour artwork is reduced to black
+with a luminance threshold (`threshold`, default 170); use `dither: true` for photos.
+The logo is scaled to fit a 45 x 14 mm box at the top right of the label; `brandName` is
+printed at the top left in the largest font that fits beside it.
 
 ### **4. Calibrate the Gap Sensor (once per roll)**
 
@@ -427,6 +436,7 @@ cd example && flutter run
 
 ### **Version 3.0.0**
 - Xprinter XP-420B support with the cargo shipment label layout
+- Logo at the top of the label (`CargoLogo`), source field, cargo name box
 - QR code encodes a readable shipment summary (configurable)
 - Example app: label form, editable series, smooth_sheets printer picker
 - Vendor SDK transports on Android (SPP) and iOS (BLE)

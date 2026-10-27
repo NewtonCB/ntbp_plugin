@@ -102,7 +102,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _showTspl(CargoLabel label) async {
     final c = PrinterScope.of(context);
-    final tspl = NtbpPlugin.previewCargoLabel(label, config: c.config);
+    final tspl = NtbpPlugin.previewCargoLabel(label, config: c.config, logo: c.printLogo ? c.logo : null);
     await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
@@ -129,7 +129,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _openSettings() async {
     final c = PrinterScope.of(context);
-    final updated = await MediaSettingsScreen.open(context, c.config);
+    final updated = await MediaSettingsScreen.open(
+      context,
+      c.config,
+      printLogo: c.printLogo,
+      hasLogo: c.logo != null,
+      onPrintLogoChanged: c.setPrintLogo,
+    );
     if (updated != null) c.setConfig(updated);
   }
 
@@ -211,7 +217,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               onReorderItem: c.moveLabel,
               proxyDecorator: (child, _, __) => Material(color: Colors.transparent, child: child),
               itemBuilder: (context, i) => Padding(
-                key: ValueKey('label-$i-${labels[i].trackingNumber}'),
+                key: ValueKey('label-$i-${labels[i].item}'),
                 padding: const EdgeInsets.only(bottom: 10),
                 child: ReorderableDelayedDragStartListener(
                   index: i,

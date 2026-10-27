@@ -71,7 +71,10 @@ class LabelCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 3),
                         Text(
-                          receiver.isEmpty ? label.destination : '$receiver  →  ${label.destination}',
+                          [
+                            if (label.cargoName.trim().isNotEmpty) label.cargoName,
+                            receiver.isEmpty ? '${label.source} → ${label.destination}' : '$receiver → ${label.destination}',
+                          ].join('  ·  '),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13),
@@ -101,11 +104,10 @@ class LabelCard extends StatelessWidget {
                   spacing: 6,
                   runSpacing: 6,
                   children: [
+                    _Chip(Icons.place_outlined, label.source),
                     _Chip(Icons.scale_rounded, label.weight),
                     _Chip(Icons.inventory_2_outlined, label.package),
-                    _Chip(Icons.local_shipping_outlined, label.serviceType),
                     _Chip(Icons.event_rounded, label.date),
-                    _Chip(Icons.qr_code_2_rounded, label.trackingNumber),
                   ],
                 ),
               ),

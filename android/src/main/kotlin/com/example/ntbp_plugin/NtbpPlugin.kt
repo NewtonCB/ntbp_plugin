@@ -159,8 +159,18 @@ class NtbpPlugin : FlutterPlugin, MethodCallHandler {
 
         // --- Raw transport and status --------------------------------------
         "sendProtocolCommands" -> {
-          val commands = call.argument<List<Int>>("commands") ?: emptyList()
-          sendBytes(ByteArray(commands.size) { commands[it].toByte() }, result)
+          // Dart sends a Uint8List (arrives as ByteArray); older callers may
+          // send a plain List<Int>.
+          val payload = when (val raw = call.argument<Any>("commands")) {
+            is ByteArray -> raw
+            is List<*> -> ByteArray(raw.size) { (raw[it] as Number).toByte() }
+            else -> ByteArray(0)
+          }
+          if (payload.isEmpty()) {
+            result.error("EMPTY_PAYLOAD", "No command bytes received", null)
+          } else {
+            sendBytes(payload, result)
+          }
         }
         "queryPrinterStatus" -> {
           queryPrinterStatus(call.argument<Int>("timeoutMs") ?: 2000, result)

@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import 'logo_bitmap.dart';
+
 /// Lightweight TSPL (Thermal Script Programming Language) command builder.
 ///
 /// Every method appends one command line and returns `this` so calls can be
@@ -105,6 +109,17 @@ class TsplBuilder {
   TsplBuilder bar(int x, int y, int width, int height) =>
       raw('BAR $x,$y,$width,$height');
 
+  /// Prints a 1-bit image. [mode] 0 = overwrite, 1 = OR, 2 = XOR.
+  ///
+  /// The pixel data is binary, so the script returned by [build] contains
+  /// bytes 0..255 as Latin-1 characters; use [buildReadable] for logs.
+  TsplBuilder bitmap(int x, int y, MonoBitmap image, {int mode = 0}) {
+    _buffer.write('BITMAP $x,$y,${image.widthBytes},${image.height},$mode,');
+    _buffer.write(String.fromCharCodes(image.data));
+    _buffer.write('\r\n');
+    return this;
+  }
+
   // ---------------------------------------------------------------------------
   // Job control
   // ---------------------------------------------------------------------------
@@ -139,9 +154,26 @@ class TsplBuilder {
   // Output
   // ---------------------------------------------------------------------------
 
+  /// The script. Text is plain ASCII; embedded bitmap data appears as
+  /// Latin-1 characters so [toBytes] can round-trip it.
   String build() => _buffer.toString();
 
-  List<int> toBytes() => build().codeUnits;
+  /// Raw bytes to send to the printer.
+  List<int> toBytes() => latin1.encode(build());
+
+  /// The script with binary bitmap payloads replaced by a placeholder, for
+  /// previews and logs.
+  String buildReadable() => makeReadable(build());
+
+  static String makeReadable(String script) {
+    return script.replaceAllMapped(
+      RegExp(r'(BITMAP \d+,\d+,(\d+),(\d+),\d+,)([\s\S]*?)\r\n'),
+      (m) {
+        final n = int.parse(m.group(2)!) * int.parse(m.group(3)!);
+        return '${m.group(1)}<$n bytes of image data>\r\n';
+      },
+    );
+  }
 
   bool get isEmpty => _buffer.isEmpty;
 
@@ -149,12 +181,22 @@ class TsplBuilder {
   String toString() => build();
 
   /// TSPL strings are delimited by double quotes and have no escape
-  /// sequence, so quotes are replaced and line breaks removed.
+  /// sequence, so quotes are replaced and line breaks removed. The built-in
+  /// fonts only cover Latin-1, so other characters become `?`.
   static String escape(String value) {
-    return value
-        .replaceAll('"', "'")
-        .replaceAll('\r', ' ')
-        .replaceAll('\n', ' ');
+    final out = StringBuffer();
+    for (final unit in value.codeUnits) {
+      if (unit == 0x22) {
+        out.write("'");
+      } else if (unit == 0x0D || unit == 0x0A) {
+        out.write(' ');
+      } else if (unit > 0xFF) {
+        out.write('?');
+      } else {
+        out.writeCharCode(unit);
+      }
+    }
+    return out.toString();
   }
 
   static String _mm(double value) {

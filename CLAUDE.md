@@ -12,9 +12,23 @@ Package name `ntbp_plugin`, Android package `com.example.ntbp_plugin`.
   fits a width, `clip()` truncates).
 - `lib/src/tspl/label_print_config.dart` — `LabelPrintConfig` (widthMm/heightMm/dpi/gapMm/blackMark/
   direction/density/speed/copies). `writeHeader()` emits SIZE, GAP|BLINE, DIRECTION, REFERENCE, CLS.
-- `lib/src/tspl/cargo_label.dart` — `CargoLabel` model + `CargoLabelLayout.buildJob()`: the XP-420B
-  cargo shipment label (sample photo at `asset/sample_label.jpeg`). Geometry on an 800x1200 reference
-  grid (100x150 mm @203 dpi) scaled to the config; fonts chosen per field by fit.
+- `lib/src/tspl/cargo_label.dart` — `CargoLabel` model + `CargoLabelLayout.buildJob(label, config, logo:)`:
+  the XP-420B cargo label. Geometry on an 800x1200 reference grid (100x150 mm @203 dpi) scaled to the
+  config; fonts chosen per field by fit. **Structure since 2026-10-27:** header band (36..146):
+  `brandName` text left (x 40, largest font fitting beside the logo) + logo right-aligned to x 760
+  (box 360x110), both vertically centred; rule at 160 → booking/item (left) + QR (right, y 186) → SENDER box (name font 4 +
+  phone font 3, 440..570) → RECEIVER (570..700) → DESTINATION|WEIGHT|PACKAGE (700..812) →
+  SOURCE|DATE (812..905) → CARGO NAME box (905..1160, `cargoName` in the largest font that fits:
+  f5 1 line → f4 1 line → f4 2 lines → f3 3 lines → f2 4 lines, via `CargoLabelLayout.wrapText`).
+  No title, no barcode, no tracking number (removed 2026-10-27 at user request). `serviceType`
+  renamed `source` (fromMap reads both). `CargoQrContent.itemReference` replaces `trackingNumber`.
+  `CargoLabel.generateReference('BK-1025', 1)` → `BK1025-001`. Original mock-up: `asset/sample_label.jpeg`,
+  sample logo: `asset/sample_logo.png` (copied to `example/assets/logo.png`).
+- `lib/src/tspl/logo_bitmap.dart` — `CargoLogo.fromBytes()` (uses `image` package, flattens alpha on
+  white, luminance threshold 170 or Floyd-Steinberg `dither`), `toMono(maxWidth,maxHeight)` → `MonoBitmap`
+  (TSPL BITMAP row format, 1 = white). Scales to fit, upscales at most 2x, caches last size.
+  `TsplBuilder.bitmap()` embeds the bytes as Latin-1 chars; `toBytes()` uses `latin1.encode`;
+  `TsplBuilder.makeReadable()` masks the binary for previews. `escape()` maps chars > 0xFF to `?`.
 - `lib/src/tspl/three_line_label.dart` — `ThreeLineQrLabel` + `ThreeLineQrLayout`: faithful port of the
   v2 Kotlin QR + 3 text lines geometry, so the legacy static methods work identically on both platforms.
 - `lib/models/printer_status.dart` — `PrinterStatus` (decodes the `ESC ! ?` status byte; -1 no
@@ -26,6 +40,10 @@ Package name `ntbp_plugin`, Android package `com.example.ntbp_plugin`.
 - Series printing (`_printSeries`): one job per label, then poll status until not printing; stops at
   first error (head open / jam / out of paper); if the printer never answers status, falls back to a
   timed delay. No FORMFEED between labels, no HOME, no CLEAR, no per-print calibration.
+- **Channel payload gotcha (bit us 2026-10-27):** `sendProtocolCommands` sends a `Uint8List`, which the
+  StandardMessageCodec delivers as `FlutterStandardTypedData` (iOS) / `ByteArray` (Android), NOT a
+  `List<int>`. Both natives accept typed data and plain lists, and reject empty payloads with
+  `EMPTY_PAYLOAD` instead of silently succeeding. Test in `test/ntbp_plugin_method_channel_test.dart`.
 - Native channel methods actually used now: scan/connect/disconnect/isConnected/status maps,
   `sendProtocolCommands` (raw bytes), `queryPrinterStatus(timeoutMs)` → int, plus simple legacy
   printText/printBarcode/printQRCode/print/clearBuffer/feedPaper which build tiny TSPL natively.

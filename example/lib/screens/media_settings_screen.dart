@@ -3,13 +3,33 @@ import 'package:ntbp_plugin/ntbp_plugin.dart';
 
 /// Label size, gap, darkness and copies. Pops with the new config or null.
 class MediaSettingsScreen extends StatefulWidget {
-  const MediaSettingsScreen({super.key, required this.initial});
+  const MediaSettingsScreen({
+    super.key,
+    required this.initial,
+    this.printLogo = true,
+    this.hasLogo = false,
+    this.onPrintLogoChanged,
+  });
   final LabelPrintConfig initial;
+  final bool printLogo;
+  final bool hasLogo;
+  final ValueChanged<bool>? onPrintLogoChanged;
 
-  static Future<LabelPrintConfig?> open(BuildContext context, LabelPrintConfig initial) {
+  static Future<LabelPrintConfig?> open(
+    BuildContext context,
+    LabelPrintConfig initial, {
+    bool printLogo = true,
+    bool hasLogo = false,
+    ValueChanged<bool>? onPrintLogoChanged,
+  }) {
     return Navigator.of(context).push<LabelPrintConfig>(MaterialPageRoute(
       fullscreenDialog: true,
-      builder: (_) => MediaSettingsScreen(initial: initial),
+      builder: (_) => MediaSettingsScreen(
+        initial: initial,
+        printLogo: printLogo,
+        hasLogo: hasLogo,
+        onPrintLogoChanged: onPrintLogoChanged,
+      ),
     ));
   }
 
@@ -25,6 +45,7 @@ class _MediaSettingsScreenState extends State<MediaSettingsScreen> {
   late int _density;
   late bool _blackMark;
   late bool _rotated;
+  late bool _printLogo;
 
   @override
   void initState() {
@@ -37,6 +58,7 @@ class _MediaSettingsScreenState extends State<MediaSettingsScreen> {
     _density = c.density ?? 8;
     _blackMark = c.blackMark;
     _rotated = c.direction == 1;
+    _printLogo = widget.printLogo;
   }
 
   static String _fmt(double v) => v == v.roundToDouble() ? v.toInt().toString() : v.toString();
@@ -107,6 +129,23 @@ class _MediaSettingsScreenState extends State<MediaSettingsScreen> {
                   onChanged: (v) => setState(() => _rotated = v),
                 ),
               ],
+            ),
+          ),
+          _Group(
+            title: 'Logo',
+            subtitle: widget.hasLogo
+                ? 'Printed centred at the top of every label.'
+                : 'No logo loaded (assets/logo.png missing).',
+            child: SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Print logo'),
+              value: _printLogo && widget.hasLogo,
+              onChanged: widget.hasLogo
+                  ? (v) {
+                      setState(() => _printLogo = v);
+                      widget.onPrintLogoChanged?.call(v);
+                    }
+                  : null,
             ),
           ),
           _Group(

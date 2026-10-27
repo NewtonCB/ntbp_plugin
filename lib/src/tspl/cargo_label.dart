@@ -1,4 +1,5 @@
 import 'label_print_config.dart';
+import 'logo_bitmap.dart';
 import 'tspl_builder.dart';
 
 /// What the QR code on a [CargoLabel] encodes.
@@ -7,8 +8,8 @@ enum CargoQrContent {
   /// shows it as text when scanned. See [CargoLabel.summaryText].
   summary,
 
-  /// Only the tracking number.
-  trackingNumber,
+  /// Only the item reference.
+  itemReference,
 
   /// The value of [CargoLabel.qrData] verbatim.
   custom,
@@ -19,54 +20,59 @@ enum CargoQrContent {
 /// The layout (see [CargoLabelLayout]) is:
 ///
 /// ```
-/// CARGO SHIPMENT
+/// BRAND NAME               [LOGO]
 /// ──────────────────────────────
 /// BOOKING REFERENCE        ┌────┐
 /// BK-1025                  │ QR │
 /// ITEM                     │    │
-/// ITEM-001 / 5             └────┘
+/// BK1025-001               └────┘
 /// ┌────────────────────────────┐
-/// │ SENDER  (up to 4 lines)    │
+/// │ SENDER   name / phone      │
 /// ├────────────────────────────┤
-/// │ RECEIVER (up to 4 lines)   │
+/// │ RECEIVER name / phone      │
 /// ├──────────┬────────┬────────┤
 /// │DESTINAT. │ WEIGHT │PACKAGE │
 /// ├──────────┴───┬────┴────────┤
-/// │ SERVICE TYPE │ DATE        │
+/// │ SOURCE       │ DATE        │
 /// ├──────────────┴─────────────┤
-/// │        ║║║ barcode ║║║     │
-/// │        TRACKING NO.        │
-/// │        123456789012        │
+/// │ CARGO NAME                 │
+/// │ Spare parts (engine)       │
 /// └────────────────────────────┘
 /// ```
+///
+/// Use [generateReference] to create item references.
 class CargoLabel {
-  final String title;
+  /// Company or brand name printed at the top left, opposite the logo.
+  final String brandName;
+
   final String bookingReference;
+
+  /// Item reference, e.g. `BK1025-001`, printed at the top.
   final String item;
+
+  /// What the cargo is, e.g. `Spare parts (engine)`. Printed in the box at
+  /// the bottom of the label.
+  final String cargoName;
 
   /// Selects what the QR code encodes. Defaults to [CargoQrContent.summary].
   final CargoQrContent qrContent;
 
   /// Custom QR payload, used when [qrContent] is [CargoQrContent.custom].
-  /// For backward compatibility a non-empty [qrData] with the default
-  /// [qrContent] is also used verbatim.
   final String? qrData;
 
-  /// Sender block, first entry is normally the name. Up to four lines are
-  /// printed.
+  /// Sender name and phone. Only the first two entries are printed.
   final List<String> sender;
 
-  /// Receiver block, up to four lines are printed.
+  /// Receiver name and phone. Only the first two entries are printed.
   final List<String> receiver;
 
   final String destination;
   final String weight;
   final String package;
-  final String serviceType;
-  final String date;
 
-  /// Printed as a Code 128 barcode and as text underneath it.
-  final String trackingNumber;
+  /// Where the cargo comes from.
+  final String source;
+  final String date;
 
   // Captions. Override to localise.
   final String bookingReferenceCaption;
@@ -76,14 +82,15 @@ class CargoLabel {
   final String destinationCaption;
   final String weightCaption;
   final String packageCaption;
-  final String serviceTypeCaption;
+  final String sourceCaption;
   final String dateCaption;
-  final String trackingCaption;
+  final String cargoNameCaption;
 
   const CargoLabel({
-    this.title = 'CARGO SHIPMENT',
+    this.brandName = '',
     required this.bookingReference,
     required this.item,
+    this.cargoName = '',
     this.qrContent = CargoQrContent.summary,
     this.qrData,
     required this.sender,
@@ -91,9 +98,8 @@ class CargoLabel {
     required this.destination,
     required this.weight,
     required this.package,
-    required this.serviceType,
+    required this.source,
     required this.date,
-    required this.trackingNumber,
     this.bookingReferenceCaption = 'BOOKING REFERENCE',
     this.itemCaption = 'ITEM',
     this.senderCaption = 'SENDER',
@@ -101,44 +107,57 @@ class CargoLabel {
     this.destinationCaption = 'DESTINATION',
     this.weightCaption = 'WEIGHT',
     this.packageCaption = 'PACKAGE',
-    this.serviceTypeCaption = 'SERVICE TYPE',
+    this.sourceCaption = 'SOURCE',
     this.dateCaption = 'DATE',
-    this.trackingCaption = 'TRACKING NO.',
+    this.cargoNameCaption = 'CARGO NAME',
   });
+
+  /// Builds an item reference from the booking reference and a running
+  /// number, e.g. `BK-1025` + 1 → `BK1025-001`. Only letters and digits of
+  /// the booking reference are kept so the result scans cleanly as Code 128.
+  static String generateReference(String bookingReference, int index, {int digits = 3}) {
+    final base = bookingReference.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+    final prefix = base.isEmpty ? 'ITEM' : base;
+    return '$prefix-${index.toString().padLeft(digits, '0')}';
+  }
+
+  String get senderName => sender.isNotEmpty ? sender[0] : '';
+  String get senderPhone => sender.length > 1 ? sender[1] : '';
+  String get receiverName => receiver.isNotEmpty ? receiver[0] : '';
+  String get receiverPhone => receiver.length > 1 ? receiver[1] : '';
 
   /// The text actually encoded in the QR code.
   String get effectiveQrData {
     switch (qrContent) {
-      case CargoQrContent.trackingNumber:
-        return trackingNumber;
+      case CargoQrContent.itemReference:
+        return item;
       case CargoQrContent.custom:
-        return (qrData == null || qrData!.isEmpty) ? trackingNumber : qrData!;
+        return (qrData == null || qrData!.isEmpty) ? item : qrData!;
       case CargoQrContent.summary:
         if (qrData != null && qrData!.isNotEmpty) return qrData!;
         return summaryText();
     }
   }
 
-  /// Human readable summary of the shipment, one field per line. This is
-  /// what a phone shows after scanning the QR code.
+  /// Human readable summary of the shipment. This is what a phone shows
+  /// after scanning the QR code.
   ///
-  /// TSPL cannot carry line breaks inside a quoted string, so when the text
-  /// is encoded for the printer the lines are joined with [separator].
+  /// TSPL cannot carry line breaks inside a quoted string, so the fields are
+  /// joined with [separator].
   String summaryText({String separator = ' | '}) {
     String join(List<String> lines) =>
         lines.where((l) => l.trim().isNotEmpty).map((l) => l.trim()).join(', ');
     final parts = <String>[
-      title,
       '$bookingReferenceCaption: $bookingReference',
       '$itemCaption: $item',
+      if (cargoName.trim().isNotEmpty) '$cargoNameCaption: $cargoName',
       if (sender.isNotEmpty) '$senderCaption: ${join(sender)}',
       if (receiver.isNotEmpty) '$receiverCaption: ${join(receiver)}',
+      '$sourceCaption: $source',
       '$destinationCaption: $destination',
       '$weightCaption: $weight',
       '$packageCaption: $package',
-      '$serviceTypeCaption: $serviceType',
       '$dateCaption: $date',
-      '$trackingCaption: $trackingNumber',
     ];
     return parts.map((p) => p.replaceAll('\n', ' ')).join(separator);
   }
@@ -151,9 +170,10 @@ class CargoLabel {
     }
 
     return CargoLabel(
-      title: map['title'] as String? ?? 'CARGO SHIPMENT',
+      brandName: map['brandName'] as String? ?? '',
       bookingReference: map['bookingReference'] as String? ?? '',
       item: map['item'] as String? ?? '',
+      cargoName: map['cargoName'] as String? ?? '',
       qrContent: CargoQrContent.values.firstWhere(
         (v) => v.name == map['qrContent'],
         orElse: () => CargoQrContent.summary,
@@ -164,9 +184,8 @@ class CargoLabel {
       destination: map['destination'] as String? ?? '',
       weight: map['weight'] as String? ?? '',
       package: map['package'] as String? ?? '',
-      serviceType: map['serviceType'] as String? ?? '',
+      source: map['source'] as String? ?? map['serviceType'] as String? ?? '',
       date: map['date'] as String? ?? '',
-      trackingNumber: map['trackingNumber'] as String? ?? '',
       bookingReferenceCaption:
           map['bookingReferenceCaption'] as String? ?? 'BOOKING REFERENCE',
       itemCaption: map['itemCaption'] as String? ?? 'ITEM',
@@ -175,16 +194,17 @@ class CargoLabel {
       destinationCaption: map['destinationCaption'] as String? ?? 'DESTINATION',
       weightCaption: map['weightCaption'] as String? ?? 'WEIGHT',
       packageCaption: map['packageCaption'] as String? ?? 'PACKAGE',
-      serviceTypeCaption: map['serviceTypeCaption'] as String? ?? 'SERVICE TYPE',
+      sourceCaption: map['sourceCaption'] as String? ?? 'SOURCE',
       dateCaption: map['dateCaption'] as String? ?? 'DATE',
-      trackingCaption: map['trackingCaption'] as String? ?? 'TRACKING NO.',
+      cargoNameCaption: map['cargoNameCaption'] as String? ?? 'CARGO NAME',
     );
   }
 
   Map<String, dynamic> toMap() => {
-        'title': title,
+        'brandName': brandName,
         'bookingReference': bookingReference,
         'item': item,
+        'cargoName': cargoName,
         'qrContent': qrContent.name,
         'qrData': qrData,
         'sender': sender,
@@ -192,9 +212,8 @@ class CargoLabel {
         'destination': destination,
         'weight': weight,
         'package': package,
-        'serviceType': serviceType,
+        'source': source,
         'date': date,
-        'trackingNumber': trackingNumber,
         'bookingReferenceCaption': bookingReferenceCaption,
         'itemCaption': itemCaption,
         'senderCaption': senderCaption,
@@ -202,15 +221,16 @@ class CargoLabel {
         'destinationCaption': destinationCaption,
         'weightCaption': weightCaption,
         'packageCaption': packageCaption,
-        'serviceTypeCaption': serviceTypeCaption,
+        'sourceCaption': sourceCaption,
         'dateCaption': dateCaption,
-        'trackingCaption': trackingCaption,
+        'cargoNameCaption': cargoNameCaption,
       };
 
   CargoLabel copyWith({
-    String? title,
+    String? brandName,
     String? bookingReference,
     String? item,
+    String? cargoName,
     CargoQrContent? qrContent,
     String? qrData,
     List<String>? sender,
@@ -218,15 +238,15 @@ class CargoLabel {
     String? destination,
     String? weight,
     String? package,
-    String? serviceType,
+    String? source,
     String? date,
-    String? trackingNumber,
   }) {
     return CargoLabel.fromMap({
       ...toMap(),
-      if (title != null) 'title': title,
+      if (brandName != null) 'brandName': brandName,
       if (bookingReference != null) 'bookingReference': bookingReference,
       if (item != null) 'item': item,
+      if (cargoName != null) 'cargoName': cargoName,
       if (qrContent != null) 'qrContent': qrContent.name,
       if (qrData != null) 'qrData': qrData,
       if (sender != null) 'sender': sender,
@@ -234,15 +254,13 @@ class CargoLabel {
       if (destination != null) 'destination': destination,
       if (weight != null) 'weight': weight,
       if (package != null) 'package': package,
-      if (serviceType != null) 'serviceType': serviceType,
+      if (source != null) 'source': source,
       if (date != null) 'date': date,
-      if (trackingNumber != null) 'trackingNumber': trackingNumber,
     });
   }
 
   @override
-  String toString() =>
-      'CargoLabel($bookingReference, $item, $trackingNumber)';
+  String toString() => 'CargoLabel($bookingReference, $item)';
 }
 
 /// Converts a [CargoLabel] into TSPL commands.
@@ -257,11 +275,17 @@ class CargoLabelLayout {
   static const double _refWidth = 800;
   static const double _refHeight = 1200;
 
-  /// Full print job: header, content and PRINT command.
-  static String buildJob(CargoLabel label, LabelPrintConfig config) {
+  /// Maximum logo box on the reference grid, in dots. The logo sits at the
+  /// right of the header band, the brand name at the left.
+  static const int logoMaxWidth = 360;
+  static const int logoMaxHeight = 110;
+
+  /// Full print job: header, content and PRINT command. [logo] is printed
+  /// at the top right, opposite [CargoLabel.brandName].
+  static String buildJob(CargoLabel label, LabelPrintConfig config, {CargoLogo? logo}) {
     final b = TsplBuilder();
     config.writeHeader(b);
-    writeContent(b, label, config);
+    writeContent(b, label, config, logo: logo);
     b.print(copies: config.copies);
     return b.build();
   }
@@ -270,8 +294,9 @@ class CargoLabelLayout {
   static void writeContent(
     TsplBuilder b,
     CargoLabel label,
-    LabelPrintConfig config,
-  ) {
+    LabelPrintConfig config, {
+    CargoLogo? logo,
+  }) {
     final sx = config.widthDots / _refWidth;
     final sy = config.heightDots / _refHeight;
     int x(num v) => (v * sx).round();
@@ -280,47 +305,74 @@ class CargoLabelLayout {
     const left = 40;
     const right = 760;
     const contentWidth = right - left;
+    const centreX = (left + right) / 2;
     final thickness = (3 * sx).round().clamp(2, 6);
+    const captionFont = TsplFont.f12x20;
 
-    // --- Title and rule -------------------------------------------------
-    final titleFont = TsplFont.fit(label.title, x(contentWidth));
-    b.text(x(left), y(48), titleFont, label.title);
-    b.bar(x(left), y(110), x(contentWidth), (3 * sy).round().clamp(2, 6));
+    // --- Header band: brand name (left) and logo (right), then a rule -----
+    const logoTop = 36;
+    const logoBottom = logoTop + logoMaxHeight;
+    final bandMidY = y(logoTop) + y(logoMaxHeight) ~/ 2;
+    var brandMaxWidth = x(contentWidth);
+    if (logo != null) {
+      final mono = logo.toMono(maxWidth: x(logoMaxWidth), maxHeight: y(logoMaxHeight));
+      final lx = x(right) - mono.width;
+      final ly = bandMidY - mono.height ~/ 2;
+      b.bitmap(lx, ly, mono);
+      brandMaxWidth = lx - x(left) - x(24);
+    }
+    final brand = label.brandName.trim();
+    if (brand.isNotEmpty && brandMaxWidth > 0) {
+      final brandFont = TsplFont.fit(brand, brandMaxWidth);
+      final brandText = TsplFont.clip(brandFont, brand, brandMaxWidth);
+      b.text(x(left), bandMidY - TsplFont.charHeight(brandFont) ~/ 2, brandFont, brandText);
+    }
+    b.bar(x(left), y(logoBottom + 14), x(contentWidth), (3 * sy).round().clamp(2, 6));
 
     // --- QR code (right) ------------------------------------------------
+    const topBlock = logoBottom + 40; // 186
     final qrData = label.effectiveQrData;
     final qrModules = _qrModules(qrData);
     final qrTarget = y(236);
     final cell = (qrTarget ~/ qrModules).clamp(3, 10);
     final qrSize = cell * qrModules;
     final qrX = x(right) - qrSize;
-    b.qrCode(qrX, y(136), qrData, ecLevel: 'M', cellWidth: cell);
+    b.qrCode(qrX, y(topBlock), qrData, ecLevel: 'M', cellWidth: cell);
 
     // --- Booking reference and item (left) ------------------------------
     final leftColWidth = qrX - x(left) - x(16);
-    final captionFont = TsplFont.f12x20;
 
-    b.text(x(left), y(140), captionFont,
+    b.text(x(left), y(topBlock + 4), captionFont,
         TsplFont.clip(captionFont, label.bookingReferenceCaption, leftColWidth));
     final bookingFont = TsplFont.fit(label.bookingReference, leftColWidth);
-    b.text(x(left), y(170), bookingFont,
+    b.text(x(left), y(topBlock + 34), bookingFont,
         TsplFont.clip(bookingFont, label.bookingReference, leftColWidth));
 
-    b.text(x(left), y(254), captionFont,
+    b.text(x(left), y(topBlock + 118), captionFont,
         TsplFont.clip(captionFont, label.itemCaption, leftColWidth));
     final itemFont = TsplFont.fit(label.item, leftColWidth);
-    b.text(x(left), y(284), itemFont,
+    b.text(x(left), y(topBlock + 148), itemFont,
         TsplFont.clip(itemFont, label.item, leftColWidth));
 
     // --- Sender / receiver boxes ----------------------------------------
-    _addressBox(b, x, y, thickness,
-        top: 376, bottom: 558, caption: label.senderCaption, lines: label.sender);
-    _addressBox(b, x, y, thickness,
-        top: 558, bottom: 736, caption: label.receiverCaption, lines: label.receiver);
+    const senderTop = 440;
+    const boxHeight = 130;
+    _partyBox(b, x, y, thickness,
+        top: senderTop,
+        bottom: senderTop + boxHeight,
+        caption: label.senderCaption,
+        name: label.senderName,
+        phone: label.senderPhone);
+    _partyBox(b, x, y, thickness,
+        top: senderTop + boxHeight,
+        bottom: senderTop + 2 * boxHeight,
+        caption: label.receiverCaption,
+        name: label.receiverName,
+        phone: label.receiverPhone);
 
     // --- Row 1: destination | weight | package ---------------------------
-    const row1Top = 736;
-    const row1Bottom = 844;
+    const row1Top = senderTop + 2 * boxHeight; // 700
+    const row1Bottom = row1Top + 112;
     const row1Cols = [left, 420, 600, right];
     final row1 = [
       (label.destinationCaption, label.destination),
@@ -335,17 +387,17 @@ class CargoLabelLayout {
           bottom: row1Bottom,
           caption: row1[i].$1,
           value: row1[i].$2,
-          captionY: 752,
-          valueY: 782,
+          captionY: row1Top + 16,
+          valueY: row1Top + 46,
           preferred: TsplFont.f32x48);
     }
 
-    // --- Row 2: service type | date -------------------------------------
-    const row2Top = 844;
-    const row2Bottom = 933;
+    // --- Row 2: source | date -------------------------------------------
+    const row2Top = row1Bottom; // 812
+    const row2Bottom = row2Top + 93;
     const row2Cols = [left, 455, right];
     final row2 = [
-      (label.serviceTypeCaption, label.serviceType),
+      (label.sourceCaption, label.source),
       (label.dateCaption, label.date),
     ];
     for (var i = 0; i < row2.length; i++) {
@@ -356,35 +408,24 @@ class CargoLabelLayout {
           bottom: row2Bottom,
           caption: row2[i].$1,
           value: row2[i].$2,
-          captionY: 860,
-          valueY: 890,
+          captionY: row2Top + 16,
+          valueY: row2Top + 46,
           preferred: TsplFont.f24x32);
     }
 
-    // --- Barcode box ----------------------------------------------------
-    const bcTop = 933;
-    const bcBottom = 1150;
-    b.box(x(left), y(bcTop), x(right), y(bcBottom), thickness: thickness);
-
-    final tracking = label.trackingNumber;
-    if (tracking.isNotEmpty) {
-      final modules = _code128Modules(tracking);
-      final maxBarWidth = x(640);
-      final narrow = (maxBarWidth ~/ modules).clamp(2, 6);
-      final barWidth = modules * narrow;
-      final centre = x((left + right) / 2);
-      b.barcode(centre - barWidth ~/ 2, y(950), tracking,
-          type: '128', height: y(100), readable: 0, narrow: narrow, wide: narrow);
-    }
-
-    _centredText(b, centre: x((left + right) / 2), yPos: y(1064),
-        font: captionFont, text: label.trackingCaption, maxWidth: x(688));
-    final trackingFont = TsplFont.fit(tracking, x(688));
-    _centredText(b, centre: x((left + right) / 2), yPos: y(1090),
-        font: trackingFont, text: tracking, maxWidth: x(688));
+    // --- Cargo name box -------------------------------------------------
+    const nameTop = row2Bottom; // 905
+    const nameBottom = 1160;
+    _cargoNameBox(b, x, y, thickness,
+        top: nameTop,
+        bottom: nameBottom,
+        caption: label.cargoNameCaption,
+        name: label.cargoName);
   }
 
-  static void _addressBox(
+  /// Caption plus the cargo name in the largest font that fits, wrapping to
+  /// two or three lines when necessary.
+  static void _cargoNameBox(
     TsplBuilder b,
     int Function(num) x,
     int Function(num) y,
@@ -392,22 +433,98 @@ class CargoLabelLayout {
     required int top,
     required int bottom,
     required String caption,
-    required List<String> lines,
+    required String name,
   }) {
     const left = 40;
     const right = 760;
     const pad = 16;
-    const bodyFont = TsplFont.f16x24;
     final innerWidth = x(right - left - 2 * pad);
 
     b.box(x(left), y(top), x(right), y(bottom), thickness: thickness);
-    b.text(x(left + pad), y(top + 14), bodyFont,
-        TsplFont.clip(bodyFont, caption, innerWidth));
+    b.text(x(left + pad), y(top + 16), TsplFont.f12x20,
+        TsplFont.clip(TsplFont.f12x20, caption, innerWidth));
 
-    final visible = lines.where((l) => l.trim().isNotEmpty).take(4).toList();
-    for (var i = 0; i < visible.length; i++) {
-      b.text(x(left + pad), y(top + 46 + i * 32), bodyFont,
-          TsplFont.clip(bodyFont, visible[i], innerWidth));
+    final text = name.trim();
+    if (text.isEmpty) return;
+
+    // Candidate (font, max lines, line pitch on the reference grid).
+    const candidates = [
+      (TsplFont.f32x48, 1, 0),
+      (TsplFont.f24x32, 1, 0),
+      (TsplFont.f24x32, 2, 44),
+      (TsplFont.f16x24, 3, 34),
+      (TsplFont.f12x20, 4, 28),
+    ];
+    for (final (font, maxLines, pitch) in candidates) {
+      final lines = wrapText(text, innerWidth ~/ TsplFont.charWidth(font));
+      if (lines.length > maxLines) continue;
+      for (var i = 0; i < lines.length; i++) {
+        b.text(x(left + pad), y(top + 50 + i * pitch), font, lines[i]);
+      }
+      return;
+    }
+    // Longer than every candidate allows: print what fits in the smallest.
+    final lines = wrapText(text, innerWidth ~/ TsplFont.charWidth(TsplFont.f12x20)).take(4).toList();
+    for (var i = 0; i < lines.length; i++) {
+      b.text(x(left + pad), y(top + 50 + i * 28), TsplFont.f12x20, lines[i]);
+    }
+  }
+
+  /// Greedy word wrap to at most [maxChars] per line. Words longer than a
+  /// line are split.
+  static List<String> wrapText(String text, int maxChars) {
+    if (maxChars <= 0) return [text];
+    final lines = <String>[];
+    var current = StringBuffer();
+    for (final word in text.split(RegExp(r'\s+'))) {
+      if (word.isEmpty) continue;
+      var w = word;
+      while (w.length > maxChars) {
+        if (current.isNotEmpty) {
+          lines.add(current.toString());
+          current = StringBuffer();
+        }
+        lines.add(w.substring(0, maxChars));
+        w = w.substring(maxChars);
+      }
+      final candidate = current.isEmpty ? w : '${current.toString()} $w';
+      if (candidate.length <= maxChars) {
+        current = StringBuffer(candidate);
+      } else {
+        lines.add(current.toString());
+        current = StringBuffer(w);
+      }
+    }
+    if (current.isNotEmpty) lines.add(current.toString());
+    return lines;
+  }
+
+  static void _partyBox(
+    TsplBuilder b,
+    int Function(num) x,
+    int Function(num) y,
+    int thickness, {
+    required int top,
+    required int bottom,
+    required String caption,
+    required String name,
+    required String phone,
+  }) {
+    const left = 40;
+    const right = 760;
+    const pad = 16;
+    final innerWidth = x(right - left - 2 * pad);
+
+    b.box(x(left), y(top), x(right), y(bottom), thickness: thickness);
+    b.text(x(left + pad), y(top + 14), TsplFont.f12x20,
+        TsplFont.clip(TsplFont.f12x20, caption, innerWidth));
+    if (name.trim().isNotEmpty) {
+      final font = TsplFont.fit(name, innerWidth, preferred: TsplFont.f24x32);
+      b.text(x(left + pad), y(top + 42), font, TsplFont.clip(font, name, innerWidth));
+    }
+    if (phone.trim().isNotEmpty) {
+      b.text(x(left + pad), y(top + 86), TsplFont.f16x24,
+          TsplFont.clip(TsplFont.f16x24, phone, innerWidth));
     }
   }
 
@@ -435,20 +552,6 @@ class CargoLabelLayout {
     b.text(x(x1 + pad), y(valueY), font, TsplFont.clip(font, value, innerWidth));
   }
 
-  static void _centredText(
-    TsplBuilder b, {
-    required int centre,
-    required int yPos,
-    required String font,
-    required String text,
-    required int maxWidth,
-  }) {
-    final clipped = TsplFont.clip(font, text, maxWidth);
-    if (clipped.isEmpty) return;
-    final width = TsplFont.textWidth(font, clipped);
-    b.text(centre - width ~/ 2, yPos, font, clipped);
-  }
-
   /// Number of modules on one side of a QR code able to hold [data] in
   /// byte mode at error correction level M. Byte mode is the conservative
   /// choice, so the real symbol is never larger than estimated.
@@ -462,18 +565,5 @@ class CargoLabelLayout {
       if (bytes <= capacities[v]) return 17 + 4 * (v + 1);
     }
     return 17 + 4 * capacities.length;
-  }
-
-  /// Width in modules of a Code 128 symbol for [data] (start + data + check
-  /// + stop). Digit-only data is packed two per symbol (subset C).
-  static int _code128Modules(String data) {
-    final numeric = RegExp(r'^\d+$').hasMatch(data);
-    int symbols;
-    if (numeric) {
-      symbols = data.length ~/ 2 + (data.length.isOdd ? 2 : 0);
-    } else {
-      symbols = data.length;
-    }
-    return 11 * (symbols + 2) + 13;
   }
 }

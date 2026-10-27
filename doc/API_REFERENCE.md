@@ -206,12 +206,22 @@ All methods in this section are `static` on `NtbpPlugin`.
 
 ### 1. `CargoLabel`
 
-Content model for the 4" x 6" cargo label. Required: `bookingReference`, `item`, `sender`
-(list of up to 4 lines), `receiver` (list of up to 4 lines), `destination`, `weight`,
-`package`, `serviceType`, `date`, `trackingNumber`. Optional: `title` (default
-`CARGO SHIPMENT`), `qrContent` (`CargoQrContent.summary` default: a readable shipment
-summary from `summaryText()`; `trackingNumber`; or `custom` with `qrData`) and `*Caption`
-overrides for every heading. `copyWith(...)` returns a modified copy. `toMap()` / `CargoLabel.fromMap()` round-trip JSON.
+Content model for the 4" x 6" cargo label. Required: `bookingReference`, `item`,
+`sender` (`[name, phone]`), `receiver` (`[name, phone]`), `source`, `destination`,
+`weight`, `package`, `date`. Optional: `brandName` (top left, opposite the logo), `cargoName` (printed large in the bottom box,
+wrapped to up to four lines), `qrContent` (`CargoQrContent.summary` default: a readable
+shipment summary from `summaryText()`; `itemReference`; or `custom` with `qrData`) and
+`*Caption` overrides for every heading. `copyWith(...)` returns a modified
+copy. `CargoLabel.generateReference(booking, index)` builds item references such as
+`BK1025-001`. `toMap()` / `CargoLabel.fromMap()` round-trip JSON.
+
+### 1b. `CargoLogo`
+
+`CargoLogo.fromBytes(Uint8List, {threshold = 170, dither = false})` decodes an image
+once. Pass it as `logo:` to `printCargoLabel`, `printCargoLabels` or
+`previewCargoLabel`; it is scaled to the 360 x 110 dot logo box (45 x 14 mm at 203 dpi),
+right-aligned in the header band, and sent with TSPL `BITMAP`. `toMono(maxWidth:, maxHeight:)` returns the 1-bit
+`MonoBitmap` if you want to place it yourself with `TsplBuilder.bitmap`.
 
 ### 2. `LabelPrintConfig`
 
@@ -229,19 +239,19 @@ Media settings shared by all jobs.
 | `offsetMm` | 0 | `OFFSET` after each label |
 | `copies` | 1 | `PRINT 1,copies` |
 
-### 3. `printCargoLabel(CargoLabel label, {LabelPrintConfig config})` → `Future<bool>`
+### 3. `printCargoLabel(CargoLabel label, {LabelPrintConfig config, CargoLogo? logo})` → `Future<bool>`
 
 Renders the label to TSPL and sends it. Returns true when the bytes were written.
 
-### 4. `printCargoLabels(List<CargoLabel> labels, {config, bool waitForPrinter = true, Duration perLabelTimeout})` → `Future<PrintBatchResult>`
+### 4. `printCargoLabels(List<CargoLabel> labels, {config, logo, bool waitForPrinter = true, Duration perLabelTimeout})` → `Future<PrintBatchResult>`
 
 Prints each label as its own job. With `waitForPrinter` the plugin polls the printer
 status after each job and stops at the first error. `PrintBatchResult` has `total`,
 `printed`, `failedIndexes`, `stoppedBy` (a `PrinterStatus`) and `success`.
 
-### 5. `previewCargoLabel(label, {config})` → `String`
+### 5. `previewCargoLabel(label, {config, logo})` → `String`
 
-The TSPL that would be sent. Useful for tests and debugging.
+The TSPL that would be sent, with binary logo data replaced by a placeholder. Useful for tests and debugging.
 
 ### 6. `calibrateGap()`, `autoCalibrate()`, `calibrateBlackMark()` → `Future<bool>`
 

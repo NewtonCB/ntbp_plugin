@@ -107,9 +107,23 @@ public class NtbpPlugin: NSObject, FlutterPlugin, XBLEManagerDelegate {
 
         // --- Raw transport and status --------------------------------------
         case "sendProtocolCommands":
-            let commands = args["commands"] as? [Int] ?? []
-            let bytes = commands.map { UInt8(truncatingIfNeeded: $0) }
-            send(Data(bytes), result: result)
+            // Dart sends a Uint8List (arrives as FlutterStandardTypedData);
+            // older callers may send a plain List<int>.
+            let payload: Data
+            if let typed = args["commands"] as? FlutterStandardTypedData {
+                payload = typed.data
+            } else if let ints = args["commands"] as? [Int] {
+                payload = Data(ints.map { UInt8(truncatingIfNeeded: $0) })
+            } else if let numbers = args["commands"] as? [NSNumber] {
+                payload = Data(numbers.map { UInt8(truncatingIfNeeded: $0.intValue) })
+            } else {
+                payload = Data()
+            }
+            if payload.isEmpty {
+                result(FlutterError(code: "EMPTY_PAYLOAD", message: "No command bytes received", details: nil))
+            } else {
+                send(payload, result: result)
+            }
         case "queryPrinterStatus":
             let timeoutMs = args["timeoutMs"] as? Int ?? 2000
             queryPrinterStatus(timeoutMs: timeoutMs, result: result)
@@ -285,7 +299,7 @@ public class NtbpPlugin: NSObject, FlutterPlugin, XBLEManagerDelegate {
             return
         }
         guard !data.isEmpty else {
-            result(true)
+            result(FlutterError(code: "EMPTY_PAYLOAD", message: "Nothing to send", details: nil))
             return
         }
 

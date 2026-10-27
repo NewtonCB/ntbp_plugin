@@ -32,12 +32,12 @@ class LabelFormScreen extends StatefulWidget {
 class _LabelFormScreenState extends State<LabelFormScreen> {
   final _formKey = GlobalKey<FormState>();
 
-  late final TextEditingController _title;
+  late final TextEditingController _brand;
   late final TextEditingController _booking;
   late final TextEditingController _item;
-  late final TextEditingController _tracking;
+  late final TextEditingController _cargoName;
   late final TextEditingController _date;
-  late final TextEditingController _service;
+  late final TextEditingController _source;
   late final TextEditingController _destination;
   late final TextEditingController _weight;
   late final TextEditingController _package;
@@ -45,6 +45,10 @@ class _LabelFormScreenState extends State<LabelFormScreen> {
   late final List<TextEditingController> _receiver;
   late final TextEditingController _customQr;
   late CargoQrContent _qrContent;
+
+  /// True while the item reference follows the booking reference
+  /// automatically (until the user edits it by hand).
+  bool _autoItem = true;
 
   bool get _editing => widget.initial != null;
 
@@ -57,19 +61,35 @@ class _LabelFormScreenState extends State<LabelFormScreen> {
     final now = DateTime.now();
     String two(int v) => v.toString().padLeft(2, '0');
 
-    _title = TextEditingController(text: i?.title ?? 'CARGO SHIPMENT');
+    _brand = TextEditingController(text: i?.brandName ?? 'BM Coach');
     _booking = TextEditingController(text: i?.bookingReference ?? '');
-    _item = TextEditingController(text: i?.item ?? 'ITEM-${idx.toString().padLeft(3, '0')} / $total');
-    _tracking = TextEditingController(text: i?.trackingNumber ?? '');
+    _item = TextEditingController(
+        text: i?.item ?? CargoLabel.generateReference(i?.bookingReference ?? '', idx));
+    _cargoName = TextEditingController(text: i?.cargoName ?? '');
     _date = TextEditingController(text: i?.date ?? '${now.year}-${two(now.month)}-${two(now.day)}');
-    _service = TextEditingController(text: i?.serviceType ?? 'Standard');
+    _source = TextEditingController(text: i?.source ?? '');
     _destination = TextEditingController(text: i?.destination ?? '');
     _weight = TextEditingController(text: i?.weight ?? '');
     _package = TextEditingController(text: i?.package ?? '$idx / $total');
-    _sender = List.generate(4, (k) => TextEditingController(text: _line(i?.sender, k)));
-    _receiver = List.generate(4, (k) => TextEditingController(text: _line(i?.receiver, k)));
+    _sender = List.generate(2, (k) => TextEditingController(text: _line(i?.sender, k)));
+    _receiver = List.generate(2, (k) => TextEditingController(text: _line(i?.receiver, k)));
     _customQr = TextEditingController(text: i?.qrData ?? '');
     _qrContent = i?.qrContent ?? CargoQrContent.summary;
+    _autoItem = i == null ||
+        i.item == CargoLabel.generateReference(i.bookingReference, idx);
+
+    _booking.addListener(_syncItemReference);
+  }
+
+  void _syncItemReference() {
+    if (!_autoItem) return;
+    final generated = CargoLabel.generateReference(_booking.text, widget.suggestedIndex);
+    if (_item.text != generated) {
+      _item.value = _item.value.copyWith(
+        text: generated,
+        selection: TextSelection.collapsed(offset: generated.length),
+      );
+    }
   }
 
   static String _line(List<String>? lines, int k) =>
@@ -77,8 +97,9 @@ class _LabelFormScreenState extends State<LabelFormScreen> {
 
   @override
   void dispose() {
+    _booking.removeListener(_syncItemReference);
     for (final c in [
-      _title, _booking, _item, _tracking, _date, _service, _destination, _weight, _package, _customQr,
+      _brand, _booking, _item, _cargoName, _date, _source, _destination, _weight, _package, _customQr,
       ..._sender, ..._receiver,
     ]) {
       c.dispose();
@@ -97,12 +118,12 @@ class _LabelFormScreenState extends State<LabelFormScreen> {
         cs.map((c) => c.text.trim()).where((t) => t.isNotEmpty).toList();
 
     final label = CargoLabel(
-      title: _title.text.trim().isEmpty ? 'CARGO SHIPMENT' : _title.text.trim(),
+      brandName: _brand.text.trim(),
       bookingReference: _booking.text.trim(),
       item: _item.text.trim(),
-      trackingNumber: _tracking.text.trim(),
+      cargoName: _cargoName.text.trim(),
       date: _date.text.trim(),
-      serviceType: _service.text.trim(),
+      source: _source.text.trim(),
       destination: _destination.text.trim(),
       weight: _weight.text.trim(),
       package: _package.text.trim(),
@@ -154,30 +175,46 @@ class _LabelFormScreenState extends State<LabelFormScreen> {
               icon: Icons.local_shipping_rounded,
               title: 'Shipment',
               children: [
-                _Field(controller: _title, label: 'Title', textCapitalization: TextCapitalization.characters),
-                _Row2(
-                  _Field(controller: _booking, label: 'Booking reference', validator: _required,
-                      textCapitalization: TextCapitalization.characters, hint: 'BK-1025'),
-                  _Field(controller: _item, label: 'Item', validator: _required,
-                      textCapitalization: TextCapitalization.characters, hint: 'ITEM-001 / 5'),
+                _Field(
+                  controller: _brand,
+                  label: 'Brand name',
+                  hint: 'Printed top left, opposite the logo',
+                  prefixIcon: Icons.business_rounded,
+                ),
+                _Field(controller: _booking, label: 'Booking reference', validator: _required,
+                    textCapitalization: TextCapitalization.characters, hint: 'BK-1025'),
+                _Field(
+                  controller: _item,
+                  label: 'Item reference',
+                  validator: _required,
+                  textCapitalization: TextCapitalization.characters,
+                  hint: 'BK1025-001',
+                  prefixIcon: Icons.qr_code_scanner_rounded,
+                  helper: 'Generated from the booking reference. Printed at the top of the label.',
+                  onChanged: (_) => _autoItem = false,
+                  suffix: IconButton(
+                    tooltip: 'Regenerate',
+                    icon: const Icon(Icons.autorenew_rounded, size: 20),
+                    onPressed: () {
+                      _autoItem = true;
+                      _syncItemReference();
+                    },
+                  ),
                 ),
                 _Field(
-                  controller: _tracking,
-                  label: 'Tracking number',
+                  controller: _cargoName,
+                  label: 'Cargo name',
                   validator: _required,
-                  keyboardType: TextInputType.number,
-                  hint: 'Printed as Code 128 barcode',
-                  prefixIcon: Icons.qr_code_scanner_rounded,
+                  hint: 'Spare parts (engine)',
+                  prefixIcon: Icons.inventory_rounded,
+                  helper: 'Printed large in the box at the bottom of the label.',
                 ),
-                _Row2(
-                  _Field(
-                    controller: _date,
-                    label: 'Date',
-                    readOnly: true,
-                    onTap: _pickDate,
-                    prefixIcon: Icons.event_rounded,
-                  ),
-                  _Field(controller: _service, label: 'Service type', hint: 'Standard'),
+                _Field(
+                  controller: _date,
+                  label: 'Date',
+                  readOnly: true,
+                  onTap: _pickDate,
+                  prefixIcon: Icons.event_rounded,
                 ),
               ],
             ),
@@ -186,9 +223,8 @@ class _LabelFormScreenState extends State<LabelFormScreen> {
               title: 'Sender',
               children: [
                 _Field(controller: _sender[0], label: 'Name / company', validator: _required),
-                _Field(controller: _sender[1], label: 'Address line'),
-                _Field(controller: _sender[2], label: 'City, country'),
-                _Field(controller: _sender[3], label: 'Phone', keyboardType: TextInputType.phone, hint: 'Tel: +255 ...'),
+                _Field(controller: _sender[1], label: 'Phone', keyboardType: TextInputType.phone,
+                    hint: 'Tel: +255 ...', prefixIcon: Icons.phone_rounded),
               ],
             ),
             _Section(
@@ -196,17 +232,20 @@ class _LabelFormScreenState extends State<LabelFormScreen> {
               title: 'Receiver',
               children: [
                 _Field(controller: _receiver[0], label: 'Name', validator: _required),
-                _Field(controller: _receiver[1], label: 'Address line'),
-                _Field(controller: _receiver[2], label: 'City, country'),
-                _Field(controller: _receiver[3], label: 'Phone', keyboardType: TextInputType.phone, hint: 'Tel: +255 ...'),
+                _Field(controller: _receiver[1], label: 'Phone', keyboardType: TextInputType.phone,
+                    hint: 'Tel: +255 ...', prefixIcon: Icons.phone_rounded),
               ],
             ),
             _Section(
               icon: Icons.inventory_2_rounded,
               title: 'Package',
               children: [
-                _Field(controller: _destination, label: 'Destination', validator: _required,
-                    textCapitalization: TextCapitalization.characters, hint: 'DAR ES SALAAM'),
+                _Row2(
+                  _Field(controller: _source, label: 'Source', validator: _required,
+                      textCapitalization: TextCapitalization.characters, hint: 'MWANZA'),
+                  _Field(controller: _destination, label: 'Destination', validator: _required,
+                      textCapitalization: TextCapitalization.characters, hint: 'DAR ES SALAAM'),
+                ),
                 _Row2(
                   _Field(controller: _weight, label: 'Weight', hint: '5.0 KG'),
                   _Field(controller: _package, label: 'Package', hint: '1 / 5'),
@@ -220,7 +259,7 @@ class _LabelFormScreenState extends State<LabelFormScreen> {
                 SegmentedButton<CargoQrContent>(
                   segments: const [
                     ButtonSegment(value: CargoQrContent.summary, label: Text('Summary'), icon: Icon(Icons.article_outlined)),
-                    ButtonSegment(value: CargoQrContent.trackingNumber, label: Text('Tracking'), icon: Icon(Icons.tag)),
+                    ButtonSegment(value: CargoQrContent.itemReference, label: Text('Item ref'), icon: Icon(Icons.tag)),
                     ButtonSegment(value: CargoQrContent.custom, label: Text('Custom'), icon: Icon(Icons.link)),
                   ],
                   selected: {_qrContent},
@@ -233,8 +272,8 @@ class _LabelFormScreenState extends State<LabelFormScreen> {
                 else
                   Text(
                     _qrContent == CargoQrContent.summary
-                        ? 'Scanning the QR shows the shipment details as text: booking, item, sender, receiver, destination, weight, package, service, date and tracking number.'
-                        : 'Scanning the QR shows only the tracking number.',
+                        ? 'Scanning the QR shows the shipment details as text: booking, item, cargo name, sender, receiver, source, destination, weight, package and date.'
+                        : 'Scanning the QR shows only the item reference.',
                     style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13),
                   ),
               ],
@@ -315,6 +354,9 @@ class _Field extends StatelessWidget {
     this.onTap,
     this.prefixIcon,
     this.maxLines = 1,
+    this.helper,
+    this.suffix,
+    this.onChanged,
   });
 
   final TextEditingController controller;
@@ -327,6 +369,9 @@ class _Field extends StatelessWidget {
   final VoidCallback? onTap;
   final IconData? prefixIcon;
   final int maxLines;
+  final String? helper;
+  final Widget? suffix;
+  final ValueChanged<String>? onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -338,11 +383,15 @@ class _Field extends StatelessWidget {
       readOnly: readOnly,
       onTap: onTap,
       maxLines: maxLines,
+      onChanged: onChanged,
       autovalidateMode: AutovalidateMode.onUserInteraction,
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
+        helperText: helper,
+        helperMaxLines: 2,
         prefixIcon: prefixIcon != null ? Icon(prefixIcon, size: 20) : null,
+        suffixIcon: suffix,
       ),
     );
   }
