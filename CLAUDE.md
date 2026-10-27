@@ -23,7 +23,8 @@ Package name `ntbp_plugin`, Android package `com.example.ntbp_plugin`.
   No title, no barcode, no tracking number (removed 2026-10-27 at user request). `serviceType`
   renamed `source` (fromMap reads both). `CargoQrContent.itemReference` replaces `trackingNumber`.
   `CargoLabel.generateReference('BK-1025', 1)` → `BK1025-001`. Original mock-up: `asset/sample_label.jpeg`,
-  sample logo: `asset/sample_logo.png` (copied to `example/assets/logo.png`).
+  sample logo lives at `example/assets/logo.png` (the `asset/sample_logo.png` copy was deleted by the user on 2026-10-28).
+  All `doc/*.md` guides were rewritten for 3.x on 2026-10-28; `.pubignore` must mirror `.gitignore`'s build dirs.
 - `lib/src/tspl/logo_bitmap.dart` — `CargoLogo.fromBytes()` (uses `image` package, flattens alpha on
   white, luminance threshold 170 or Floyd-Steinberg `dither`), `toMono(maxWidth,maxHeight)` → `MonoBitmap`
   (TSPL BITMAP row format, 1 = white). Scales to fit, upscales at most 2x, caches last size.

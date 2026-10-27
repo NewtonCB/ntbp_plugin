@@ -1,3 +1,17 @@
+# .pubignore replaces .gitignore for pub in this directory, so the build
+# artefacts from .gitignore must be repeated here.
+build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+pubspec.lock
+*.log
+*.swp
+.DS_Store
+.idea/
+*.iml
+
+# Vendor SDK demos, manuals and sample images (kept in git, not needed by apps).
 sdks/
 asset/
 CLAUDE.md

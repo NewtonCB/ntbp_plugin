@@ -1,624 +1,152 @@
-# NTBP Plugin - Development Guide
+# Development Guide (3.x)
 
-## 🛠️ Developer Guide for Contributing and Extending
+For contributors to the plugin itself.
 
-This guide is for developers who want to contribute to the NTBP Plugin, add new features, or understand the internal architecture.
-
-## 📋 Table of Contents
-
-1. [Project Structure](#project-structure)
-2. [Architecture Overview](#architecture-overview)
-3. [Adding New Features](#adding-new-features)
-4. [Testing](#testing)
-5. [Building and Publishing](#building-and-publishing)
-6. [Code Style and Standards](#code-style-and-standards)
-7. [Debugging](#debugging)
-8. [Performance Optimization](#performance-optimization)
-
-## 🏗️ Project Structure
+## 1. Project structure
 
 ```
-ntbp_plugin/
-├── lib/                                    # Dart implementation
-│   ├── ntbp_plugin.dart                   # Main plugin class
-│   ├── ntbp_plugin_platform_interface.dart # Abstract platform interface
-│   ├── ntbp_plugin_method_channel.dart     # Method channel implementation
-│   └── models/                            # Data models
-│       └── bluetooth_device.dart          # Bluetooth device model
-├── android/                               # Android native implementation
-│   └── src/main/kotlin/
-│       └── com/example/ntbp_plugin/
-│           └── NtbpPlugin.kt              # Main Android plugin class
-├── ios/                                   # iOS native implementation
-│   └── Classes/
-│       └── NtbpPlugin.swift               # Main iOS plugin class
-├── example/                               # Example Flutter app
-│   └── lib/
-│       └── main.dart                      # Example implementation
-├── test/                                  # Unit tests
-│   └── ntbp_plugin_test.dart             # Plugin tests
-├── docs/                                  # Documentation
-├── pubspec.yaml                           # Plugin configuration
-└── README.md                              # Main documentation
+lib/
+  ntbp_plugin.dart                  public API (NtbpPlugin)
+  ntbp_plugin_platform_interface.dart
+  ntbp_plugin_method_channel.dart   channel 'ntbp_plugin'
+  models/                           BluetoothDevice, PrintCommand, PrinterStatus
+  src/tspl/
+    tspl_builder.dart               TsplBuilder, TsplFont
+    label_print_config.dart         LabelPrintConfig (media)
+    cargo_label.dart                CargoLabel, CargoLabelLayout
+    logo_bitmap.dart                CargoLogo, MonoBitmap
+    three_line_label.dart           legacy 2.x layout
+  src/protocols/                    legacy Dart "protocol" layer (kept for compatibility)
+android/
+  src/main/kotlin/.../NtbpPlugin.kt transport over Xprinter printer-lib (SPP), permissions
+  libs/repo/net/posprinter/...      the vendor aar as a local Maven repository
+ios/
+  Classes/NtbpPlugin.swift          transport over Xprinter PrinterSDK (BLE)
+  Classes/ntbp_plugin.h             umbrella header (required, see below)
+  Classes/PrinterSDK/*.h            vendor headers
+  Libraries/libPrinterSDK.a         vendor static library (arm64 device + x86_64 simulator)
+example/                            reference app (see UI_IMPLEMENTATION_GUIDE.md)
+test/                               Dart unit tests
+sdks/                               vendor demos and manuals (git only, not published)
+doc/                                this documentation
 ```
 
-## 🏛️ Architecture Overview
+## 2. Architecture
 
-### Flutter Plugin Architecture
+One rule: **layout in Dart, transport in native.**
 
-The NTBP Plugin follows Flutter's standard plugin architecture:
+- Dart builds the complete TSPL job (text plus binary bitmap data) and sends it as a
+  `Uint8List` through `sendProtocolCommands`.
+- The native side only connects, writes bytes and answers the status query. It never
+  changes the bytes. This is what guarantees identical output on both platforms.
+- The two other native responsibilities are device discovery and, on Android, runtime
+  permissions.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Flutter App                             │
-├─────────────────────────────────────────────────────────────┤
-│                 ntbp_plugin.dart                           │
-│              (Public API Interface)                        │
-├─────────────────────────────────────────────────────────────┤
-│           ntbp_plugin_platform_interface.dart              │
-│              (Abstract Platform Interface)                 │
-├─────────────────────────────────────────────────────────────┤
-│           ntbp_plugin_method_channel.dart                  │
-│              (Flutter Method Channel)                     │
-├─────────────────────────────────────────────────────────────┤
-│                    Native Implementation                    │
-│  ┌─────────────────┐    ┌─────────────────┐               │
-│  │   Android       │    │      iOS        │               │
-│  │   (Kotlin)      │    │   (Swift)       │               │
-│  │                 │    │                 │               │
-│  │ • Bluetooth     │    │ • CoreBluetooth │               │
-│  │ • TSPL Commands │    │ • TSPL Commands │               │
-│  │ • Buffer Mgmt   │    │ • Buffer Mgmt   │               │
-│  └─────────────────┘    └─────────────────┘               │
-└─────────────────────────────────────────────────────────────┘
-```
+Channel methods actually used by 3.x:
 
-### Data Flow
+| Method | Purpose |
+|---|---|
+| `hasBluetoothPermissions`, `requestBluetoothPermissions` | permissions |
+| `isBluetoothAvailable` | adapter state |
+| `startScan`, `stopScan`, `getDiscoveredDevices` | discovery |
+| `connectToDevice`, `disconnect`, `isConnected`, `getConnectionStatus`, `getDetailedConnectionStatus` | connection |
+| `sendProtocolCommands` | raw bytes (typed data) |
+| `queryPrinterStatus` | `ESC ! ?` → int |
+| `printText`, `printBarcode`, `printQRCode`, `print`, `clearBuffer`, `feedPaper` | small legacy helpers built natively |
 
-1. **Flutter App** calls methods on `NtbpPlugin`
-2. **Platform Interface** defines abstract methods
-3. **Method Channel** bridges Flutter and native code
-4. **Native Implementation** executes platform-specific logic
-5. **Results** flow back through the same path
-
-### Key Components
-
-#### 1. Main Plugin Class (`ntbp_plugin.dart`)
-- Public API for Flutter developers
-- Static methods that delegate to platform interface
-- Error handling and parameter validation
-
-#### 2. Platform Interface (`ntbp_plugin_platform_interface.dart`)
-- Abstract methods that platforms must implement
-- Ensures consistent API across platforms
-- Platform detection and registration
-
-#### 3. Method Channel (`ntbp_plugin_method_channel.dart`)
-- Flutter's method channel implementation
-- Serializes/deserializes data between Flutter and native
-- Handles method invocation and result handling
-
-#### 4. Native Implementation
-- **Android**: Kotlin implementation using Android Bluetooth APIs
-- **iOS**: Swift implementation using CoreBluetooth framework
-
-## 🚀 Adding New Features
-
-### Step 1: Define the Feature in Platform Interface
-
-```dart
-// lib/ntbp_plugin_platform_interface.dart
-abstract class NtbpPluginPlatform extends PlatformInterface {
-  // ... existing methods ...
-  
-  /// New feature method
-  Future<bool> newFeature({
-    required String parameter1,
-    int? parameter2,
-  }) {
-    throw UnimplementedError('newFeature() has not been implemented.');
-  }
-}
-```
-
-### Step 2: Implement in Method Channel
-
-```dart
-// lib/ntbp_plugin_method_channel.dart
-@override
-Future<bool> newFeature({
-  required String parameter1,
-  int? parameter2,
-}) async {
-  final result = await methodChannel.invokeMethod<bool>('newFeature', {
-    'parameter1': parameter1,
-    'parameter2': parameter2,
-  });
-  return result ?? false;
-}
-```
-
-### Step 3: Implement in Native Code
-
-#### Android (Kotlin)
-
-```kotlin
-// android/src/main/kotlin/com/example/ntbp_plugin/NtbpPlugin.kt
-class NtbpPlugin: FlutterPlugin, MethodCallHandler {
-  override fun onMethodCall(call: MethodCall, result: Result) {
-    when (call.method) {
-      // ... existing methods ...
-      
-      "newFeature" -> {
-        val parameter1 = call.argument<String>("parameter1") ?: ""
-        val parameter2 = call.argument<Int>("parameter2") ?: 0
-        
-        newFeature(parameter1, parameter2, result)
-      }
-      
-      else -> {
-        result.notImplemented()
-      }
-    }
-  }
-  
-  private fun newFeature(parameter1: String, parameter2: Int, result: Result) {
-    coroutineScope.launch {
-      try {
-        // Implementation logic here
-        val success = performNewFeature(parameter1, parameter2)
-        result.success(success)
-      } catch (e: Exception) {
-        result.error("NEW_FEATURE_ERROR", "Failed to perform new feature: ${e.message}", null)
-      }
-    }
-  }
-  
-  private suspend fun performNewFeature(parameter1: String, parameter2: Int): Boolean {
-    // Your implementation here
-    return true
-  }
-}
-```
-
-#### iOS (Swift)
-
-```swift
-// ios/Classes/NtbpPlugin.swift
-public class NtbpPlugin: NSObject, FlutterPlugin {
-  public static func register(with registrar: FlutterPluginRegistrar) {
-    let channel = FlutterMethodChannel(name: "ntbp_plugin", binaryMessenger: registrar.messenger())
-    let instance = NtbpPlugin()
-    registrar.addMethodCallDelegate(instance, channel: channel)
-  }
-  
-  public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-    switch call.method {
-    // ... existing methods ...
-    
-    case "newFeature":
-      guard let args = call.arguments as? [String: Any],
-            let parameter1 = args["parameter1"] as? String,
-            let parameter2 = args["parameter2"] as? Int else {
-        result(FlutterError(code: "INVALID_ARGUMENTS", message: "Invalid arguments", details: nil))
-        return
-      }
-      
-      newFeature(parameter1: parameter1, parameter2: parameter2, result: result)
-      
-    default:
-      result(FlutterMethodNotImplemented)
-    }
-  }
-  
-  private func newFeature(parameter1: String, parameter2: Int, result: @escaping FlutterResult) {
-    // Implementation logic here
-    do {
-      let success = try performNewFeature(parameter1: parameter1, parameter2: parameter2)
-      result(success)
-    } catch {
-      result(FlutterError(code: "NEW_FEATURE_ERROR", message: "Failed to perform new feature: \(error.localizedDescription)", details: nil))
-    }
-  }
-  
-  private func performNewFeature(parameter1: String, parameter2: Int) throws -> Bool {
-    // Your implementation here
-    return true
-  }
-}
-```
-
-### Step 4: Add to Main Plugin Class
-
-```dart
-// lib/ntbp_plugin.dart
-class NtbpPlugin {
-  // ... existing methods ...
-  
-  /// New feature method
-  static Future<bool> newFeature({
-    required String parameter1,
-    int? parameter2,
-  }) {
-    return NtbpPluginPlatform.instance.newFeature(
-      parameter1: parameter1,
-      parameter2: parameter2,
-    );
-  }
-}
-```
-
-### Step 5: Update Tests
-
-```dart
-// test/ntbp_plugin_test.dart
-class MockNtbpPluginPlatform extends Mock implements NtbpPluginPlatform {
-  // ... existing mocks ...
-  
-  @override
-  Future<bool> newFeature({
-    required String parameter1,
-    int? parameter2,
-  }) => Future.value(true);
-}
-
-void main() {
-  group('NtbpPlugin', () {
-    // ... existing tests ...
-    
-    test('newFeature returns correct value', () async {
-      final result = await NtbpPlugin.newFeature(
-        parameter1: 'test',
-        parameter2: 42,
-      );
-      expect(result, isTrue);
-    });
-  });
-}
-```
-
-## 🧪 Testing
-
-### Running Tests
+## 3. Setting up
 
 ```bash
-# Run all tests
-flutter test
-
-# Run with coverage
-flutter test --coverage
-
-# Run specific test file
-flutter test test/ntbp_plugin_test.dart
-
-# Run tests in watch mode
-flutter test --watch
-```
-
-### Test Structure
-
-```dart
-// test/ntbp_plugin_test.dart
-import 'package:flutter_test/flutter_test.dart';
-import 'package:ntbp_plugin/ntbp_plugin.dart';
-import 'package:ntbp_plugin/ntbp_plugin_platform_interface.dart';
-import 'package:plugin_platform_interface/plugin_platform_interface.dart';
-import 'package:mockito/mockito.dart';
-
-class MockNtbpPluginPlatform extends Mock implements NtbpPluginPlatform {}
-
-void main() {
-  group('NtbpPlugin', () {
-    late NtbpPlugin ntbpPlugin;
-    late MockNtbpPluginPlatform mockPlatform;
-
-    setUp(() {
-      mockPlatform = MockNtbpPluginPlatform();
-      ntbpPlugin = NtbpPlugin();
-      
-      // Set the mock platform as the instance
-      NtbpPluginPlatform.instance = mockPlatform;
-    });
-
-    group('isBluetoothAvailable', () {
-      test('returns true when platform returns true', () async {
-        when(mockPlatform.isBluetoothAvailable()).thenAnswer((_) async => true);
-        
-        final result = await ntbpPlugin.isBluetoothAvailable();
-        
-        expect(result, isTrue);
-        verify(mockPlatform.isBluetoothAvailable()).called(1);
-      });
-
-      test('returns false when platform returns false', () async {
-        when(mockPlatform.isBluetoothAvailable()).thenAnswer((_) async => false);
-        
-        final result = await ntbpPlugin.isBluetoothAvailable();
-        
-        expect(result, isFalse);
-        verify(mockPlatform.isBluetoothAvailable()).called(1);
-      });
-    });
-
-    // Add more test groups for other methods
-  });
-}
-```
-
-### Integration Testing
-
-```dart
-// test/integration/printer_integration_test.dart
-import 'package:flutter_test/flutter_test.dart';
-import 'package:integration_test/integration_test.dart';
-
-void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-
-  group('Printer Integration Tests', () {
-    testWidgets('should connect to printer and print label', (tester) async {
-      // Build the app
-      await tester.pumpWidget(MyApp());
-      await tester.pumpAndSettle();
-
-      // Find and tap scan button
-      final scanButton = find.text('Scan for Printers');
-      expect(scanButton, findsOneWidget);
-      await tester.tap(scanButton);
-      await tester.pumpAndSettle();
-
-      // Wait for devices to be discovered
-      await tester.pump(Duration(seconds: 15));
-
-      // Find and tap on a device
-      final deviceTile = find.byType(ListTile).first;
-      await tester.tap(deviceTile);
-      await tester.pumpAndSettle();
-
-      // Verify connection
-      expect(find.text('Connected'), findsOneWidget);
-
-      // Test printing
-      final printButton = find.text('Print Test Label');
-      expect(printButton, findsOneWidget);
-      await tester.tap(printButton);
-      await tester.pumpAndSettle();
-
-      // Verify success message
-      expect(find.text('✅ Label printed successfully!'), findsOneWidget);
-    });
-  });
-}
-```
-
-## 🏗️ Building and Publishing
-
-### Local Development
-
-```bash
-# Install dependencies
+flutter --version       # 3.19+; developed on 3.44
+cd ntbp_plugin
 flutter pub get
-
-# Run example app
-cd example
-flutter run
-
-# Build example app
-flutter build apk --debug
-```
-
-### Plugin Development
-
-```bash
-# Analyze code
-flutter analyze
-
-# Run tests
 flutter test
-
-# Check for issues
-flutter doctor
+cd example && flutter pub get
 ```
 
-### Publishing to pub.dev
+Android needs JDK 17 and the Android SDK with API 35. iOS needs Xcode 15+ and CocoaPods.
+
+## 4. Building
 
 ```bash
-# Check if ready for publishing
-flutter pub publish --dry-run
+cd example
+flutter build apk --debug                 # Android
+flutter build ios --no-codesign --debug   # iOS (device build)
+```
 
-# Publish to pub.dev
+Run the example on a real device with `flutter run -d <device id>` from `example/`.
+
+### Things that bite
+
+- **Android aar.** AGP refuses `implementation files('x.aar')` inside a library module.
+  The aar lives in `android/libs/repo` as a Maven repository and `android/build.gradle`
+  registers that repository on `rootProject.allprojects` so the host app can resolve the
+  transitive dependency. Keep it that way.
+- **iOS umbrella header.** The Swift class adopts the Objective-C `XBLEManagerDelegate`, so
+  the generated `ntbp_plugin-Swift.h` imports `<ntbp_plugin/ntbp_plugin.h>`. That file must
+  exist in `Classes/` and be listed first in `public_header_files`.
+- **Podspec changes** are not always picked up by `flutter build`; run `pod install` in
+  `example/ios` after editing the podspec.
+- **Simulator.** The vendor library has no arm64 simulator slice. `EXCLUDED_ARCHS` for the
+  simulator is set in the podspec; use a device.
+- **Typed data on the channel.** A `Uint8List` arrives natively as
+  `FlutterStandardTypedData` / `ByteArray`, not as a list. Both natives accept both forms
+  and reject empty payloads; keep that when touching `sendProtocolCommands`.
+- **`.pubignore` replaces `.gitignore`** for pub. Every build directory ignored in
+  `.gitignore` must be repeated in `.pubignore`, otherwise `build/` ends up in the package.
+
+## 5. Tests
+
+```bash
+flutter test                                   # all
+flutter test test/cargo_label_layout_test.dart # layout only
+```
+
+`cargo_label_layout_test.dart` checks: job framing (SIZE/GAP/CLS/PRINT, no CLEAR/HOME/
+FORMFEED), every field present, escaping, bounds (nothing drawn outside the label), font
+fit and wrapping, QR payload, logo placement and bitmap packing, map round trip, the legacy
+three-line geometry and status decoding. `ntbp_plugin_method_channel_test.dart` asserts that
+bytes cross the channel as typed data.
+
+When you change the layout, print the job and compare it by eye:
+
+```dart
+print(NtbpPlugin.previewCargoLabel(sample, config: const LabelPrintConfig()));
+```
+
+Then print on the XP-420B; the reference mock-up is `asset/sample_label.jpeg` in the
+repository.
+
+## 6. Adding a feature
+
+1. **Layout or model change**: edit `lib/src/tspl/`, add a test, run `flutter test`.
+   No native change needed.
+2. **New native capability** (rare):
+   - add the method to `NtbpPluginPlatform` and `MethodChannelNtbpPlugin`,
+   - expose it on `NtbpPlugin`,
+   - implement in `NtbpPlugin.kt` (`when (call.method)`) and `NtbpPlugin.swift`
+     (`switch call.method`), always resolving the result exactly once and on the main thread,
+   - add it to the mock in `test/ntbp_plugin_test.dart`,
+   - document it in `doc/API_REFERENCE.md`.
+3. Update `CHANGELOG.md` and, for behaviour changes, `README.md`.
+
+Error codes are `UPPER_SNAKE` strings in `FlutterError` / `result.error`; reuse the existing
+ones listed in `TROUBLESHOOTING.md`.
+
+## 7. Code style
+
+- `flutter analyze` must be clean for `lib/` and `test/` (the legacy `src/protocols` prints
+  are tolerated).
+- Dart: 2-space indent, trailing commas, `const` where possible.
+- Kotlin: no coroutines needed; use the single-thread executor and `mainHandler.post` for
+  results. Swift: results on the main queue, guard against double replies.
+- Keep native code free of layout decisions.
+
+## 8. Publishing
+
+```bash
+flutter pub publish --dry-run   # expect 0 warnings and an archive of about 1 MB
 flutter pub publish
 ```
 
-## 📝 Code Style and Standards
-
-### Dart/Flutter Standards
-
-- Follow [Dart Style Guide](https://dart.dev/guides/language/effective-dart/style)
-- Use [Flutter Style Guide](https://github.com/flutter/flutter/wiki/Style-guide-for-Flutter-repo)
-- Run `flutter analyze` before committing
-
-### Kotlin Standards
-
-- Follow [Kotlin Coding Conventions](https://kotlinlang.org/docs/coding-conventions.html)
-- Use meaningful variable names
-- Add comprehensive error handling
-
-### Swift Standards
-
-- Follow [Swift API Design Guidelines](https://swift.org/documentation/api-design-guidelines/)
-- Use descriptive method names
-- Implement proper error handling
-
-### Documentation Standards
-
-- Document all public methods
-- Use clear, concise descriptions
-- Include usage examples
-- Follow [Dart Documentation](https://dart.dev/guides/language/effective-dart/documentation) standards
-
-## 🐛 Debugging
-
-### Flutter Debugging
-
-```dart
-// Add debug prints
-print('🔍 Debug: $variable');
-
-// Use Flutter DevTools
-// Run: flutter run --debug
-// Open DevTools in browser
-```
-
-### Android Debugging
-
-```kotlin
-// Add Android logs
-android.util.Log.d("NTBPPlugin", "Debug: $message");
-android.util.Log.e("NTBPPlugin", "Error: $error");
-
-// Check logcat
-// adb logcat | grep NTBPPlugin
-```
-
-### iOS Debugging
-
-```swift
-// Add iOS logs
-print("Debug: \(message)")
-os_log("Error: %@", log: .default, type: .error, error.localizedDescription)
-
-// Check Xcode console
-```
-
-### Common Debug Scenarios
-
-#### 1. Method Channel Issues
-
-```dart
-// Check if method is registered
-print('Available methods: ${methodChannel.methodCallHandler}');
-
-// Verify argument types
-print('Arguments: ${call.arguments}');
-print('Argument types: ${call.arguments.runtimeType}');
-```
-
-#### 2. Bluetooth Connection Issues
-
-```kotlin
-// Check connection state
-Log.d("NTBPPlugin", "Socket connected: ${socket?.isConnected}")
-Log.d("NTBPPlugin", "OutputStream available: ${outputStream != null}")
-
-// Verify device state
-Log.d("NTBPPlugin", "Device bond state: ${device.bondState}")
-```
-
-#### 3. TSPL Command Issues
-
-```kotlin
-// Log TSPL commands
-Log.d("NTBPPlugin", "Sending commands: $commands")
-
-// Check command response
-val response = inputStream?.read()
-Log.d("NTBPPlugin", "Command response: $response")
-```
-
-## ⚡ Performance Optimization
-
-### Connection Optimization
-
-```kotlin
-// Implement connection pooling
-class ConnectionManager {
-  private var connectionPool = mutableMapOf<String, BluetoothSocket>()
-  
-  suspend fun getConnection(device: BluetoothDevice): BluetoothSocket {
-    return connectionPool.getOrPut(device.address) {
-      createConnection(device)
-    }
-  }
-}
-```
-
-### Command Batching
-
-```kotlin
-// Batch TSPL commands for better performance
-private suspend fun sendBatchedCommands(commands: List<String>) {
-  val batchedCommands = commands.joinToString("\n")
-  sendCommands(batchedCommands.toByteArray().toList())
-}
-```
-
-### Memory Management
-
-```kotlin
-// Proper resource cleanup
-override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
-  methodChannel.setMethodCallHandler(null)
-  coroutineScope.cancel()
-  disconnect()
-}
-```
-
-### Async Operations
-
-```kotlin
-// Use appropriate dispatchers
-coroutineScope.launch(Dispatchers.IO) {
-  // Bluetooth operations
-}
-
-coroutineScope.launch(Dispatchers.Main) {
-  // UI updates
-}
-```
-
-## 🔧 Development Tools
-
-### Recommended IDEs
-
-- **Android Studio**: For Android development
-- **Xcode**: For iOS development
-- **VS Code**: For Flutter/Dart development
-
-### Useful Extensions
-
-- **Flutter**: Official Flutter extension
-- **Dart**: Official Dart extension
-- **Kotlin**: Kotlin language support
-- **Swift**: Swift language support
-
-### Debugging Tools
-
-- **Flutter DevTools**: For Flutter debugging
-- **Android Studio Debugger**: For Android debugging
-- **Xcode Debugger**: For iOS debugging
-- **adb logcat**: For Android logs
-
-## 📚 Additional Resources
-
-### Flutter Plugin Development
-
-- [Flutter Plugin Development](https://flutter.dev/docs/development/packages-and-plugins/developing-packages)
-- [Platform Channels](https://flutter.dev/docs/development/platform-integration/platform-channels)
-- [Plugin Testing](https://flutter.dev/docs/development/packages-and-plugins/developing-packages#testing)
-
-### Bluetooth Development
-
-- [Android Bluetooth](https://developer.android.com/guide/topics/connectivity/bluetooth)
-- [iOS CoreBluetooth](https://developer.apple.com/documentation/corebluetooth)
-- [TSPL Commands](https://www.pos-shop.ru/upload/iblock/e6d/e6dcd9090030c75de3ffd3435c1e2024.pdf)
-
-### Testing Resources
-
-- [Flutter Testing](https://flutter.dev/docs/testing)
-- [Mockito](https://pub.dev/packages/mockito)
-- [Integration Testing](https://flutter.dev/docs/testing/integration-tests)
-
----
-
-This development guide provides comprehensive information for contributing to and extending the NTBP Plugin. Follow these guidelines to ensure code quality, maintainability, and consistency across the project. 
+Checklist in `RELEASE_PREPARATION.md`.

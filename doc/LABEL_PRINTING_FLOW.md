@@ -1,342 +1,198 @@
-# NTBP Plugin - Label Printing Flow
+# Label Printing Flow (3.x)
 
-## 🏷️ QR + Text Label Printing Process
+How a `CargoLabel` becomes ink on an Xprinter XP-420B, and what happens between labels in a
+series.
 
-This document explains how the NTBP Plugin handles label printing, specifically the flow for printing QR codes with text below them.
+## Overview
 
-## 📋 Table of Contents
-
-1. [Overview](#overview)
-2. [Printing Flow](#printing-flow)
-3. [TSPL Commands](#tspl-commands)
-4. [Positioning](#positioning)
-5. [Buffer Management](#buffer-management)
-6. [Single vs Multiple Labels](#single-vs-multiple-labels)
-
-## 🎯 Overview
-
-The plugin implements a sophisticated label printing system that:
-- Combines QR codes and text in single label frames
-- Automatically positions content based on label dimensions
-- Uses gap detection for proper label boundaries
-- Manages print buffer to prevent content bleeding
-
-## 🔄 Printing Flow
-
-### High-Level Process
 ```
-User Request → Validate Input → Connect to Printer → Send TSPL Commands → Print → Return Result
+CargoLabel + LabelPrintConfig + CargoLogo
+        │
+        ▼  CargoLabelLayout.buildJob()          (Dart, lib/src/tspl/)
+TSPL script (text + binary logo bytes)
+        │
+        ▼  NtbpPlugin.sendTspl() → sendProtocolCommands(Uint8List)
+Native transport
+   Android: Xprinter printer-lib → classic Bluetooth SPP
+   iOS:     Xprinter PrinterSDK  → Bluetooth LE
+        │
+        ▼
+Printer prints; plugin polls ESC ! ? status between labels
 ```
 
-### Detailed Steps
+Everything about the look of the label is decided in Dart. The native code never changes
+the bytes, so Android and iOS print the same label for the same input.
 
-#### 1. **Input Validation**
-```dart
-final success = await _plugin.printSingleLabelWithGapDetection(
-  qrData: "QR123456",
-  textData: "Sample Label",
-  width: 75.0,    // mm
-  height: 50.0,   // mm
-  unit: "mm",
-  dpi: 203,
-  copies: 1,
-  textSize: 9,
-);
+## 1. The job
+
+`CargoLabelLayout.buildJob(label, config, logo: logo)` returns one complete TSPL job:
+
 ```
-
-#### 2. **Dimension Conversion**
-```kotlin
-// Convert mm to printer dots (203 DPI)
-val widthInDots = (width * dpi / 25.4).toInt()  // 75mm = 1488 dots
-val heightInDots = (height * dpi / 25.4).toInt() // 50mm = 992 dots
-```
-
-#### 3. **Position Calculation**
-```kotlin
-// Calculate margins and available space
-val marginInDots = when {
-  labelWidth <= 30 -> convertToDots(dpi, 2.0, "mm")   // 2mm margin
-  labelWidth <= 60 -> convertToDots(dpi, 3.0, "mm")   // 3mm margin
-  else -> convertToDots(dpi, 4.0, "mm")               // 4mm margin
-}
-
-val availableWidth = widthInDots - 2 * marginInDots
-val availableHeight = heightInDots - 2 * marginInDots
-
-// QR code positioning (centered, upper portion)
-val qrSize = (availableWidth * 0.7).toInt().coerceAtMost((availableHeight * 0.6).toInt())
-val qrX = marginInDots + (availableWidth - qrSize) / 2
-val qrY = marginInDots + (availableHeight * 0.15).toInt()
-
-// Text positioning (centered, below QR)
-val textX = marginInDots + (availableWidth - textWidth) / 2
-val textY = qrY + qrSize + convertToDots(dpi, 8.0, "mm") // 8mm below QR
-```
-
-## 🔧 TSPL Commands
-
-### Command Sequence
-
-#### **Phase 1: Printer Setup**
-```tspl
-CLEAR                    # Clear print buffer
-SIZE 1488,992           # Set label size (75mm x 50mm at 203 DPI)
-GAP 40,0                # Set gap between labels (2mm)
-GAPDETECT ON            # Enable gap detection
-AUTODETECT ON           # Enable auto-detection
-CLS                     # Clear screen
-```
-
-#### **Phase 2: Content Positioning**
-```tspl
-REFERENCE 0,0           # Set reference point to top-left
-DIRECTION 0             # Set print direction (normal)
-```
-
-#### **Phase 3: Content Printing**
-```tspl
-QRCODE 334,148,H,10,A,0,"QR123456"    # Print QR code
-TEXT 334,968,"9",0,1,1,"Sample Label" # Print text below QR
-PRINT 1                                # Execute print
-```
-
-### Command Details
-
-| Command | Purpose | Parameters |
-|---------|---------|------------|
-| `SIZE` | Set label dimensions | `width,height` in dots |
-| `GAP` | Set gap between labels | `gapSize,0` in dots |
-| `QRCODE` | Print QR code | `x,y,model,size,alignment,0,"data"` |
-| `TEXT` | Print text | `x,y,font,rotation,xScale,yScale,"text"` |
-| `PRINT` | Execute print | `copies` |
-
-## 📐 Positioning
-
-### Dynamic Positioning System
-
-The plugin automatically calculates optimal positions:
-
-#### **Small Labels (≤30mm width)**
-- Margin: 2mm
-- QR size: 60% of available width
-- Text: 8mm below QR code
-
-#### **Medium Labels (31-60mm width)**
-- Margin: 3mm
-- QR size: 65% of available width
-- Text: 8mm below QR code
-
-#### **Large Labels (>60mm width)**
-- Margin: 4mm
-- QR size: 70% of available width
-- Text: 8mm below QR code
-
-### Example: 75mm x 50mm Label
-```
-Label: 75mm x 50mm (1488 x 992 dots)
-Margins: 3mm (24 dots)
-Available: 1440 x 944 dots
-
-QR Code: 820 x 820 dots
-Position: (310, 142) dots
-
-Text: 20mm width (160 dots)
-Position: (640, 962) dots
-```
-
-## 🧹 Buffer Management
-
-### Buffer Clearing Strategy
-
-#### **Aggressive Buffer Clearing**
-```kotlin
-private suspend fun clearBufferAggressively() {
-  sendCommands("CLEAR".toByteArray().toList())  // Clear buffer
-  Thread.sleep(150)
-  sendCommands("CLS".toByteArray().toList())    // Clear screen
-  Thread.sleep(150)
-  sendCommands("HOME".toByteArray().toList())   // Reset position
-  Thread.sleep(200)
-}
-```
-
-#### **When Buffer is Cleared**
-1. **Before each label** to prevent content bleeding
-2. **After gap detection** initialization
-3. **Between multiple labels** in sequence printing
-
-### Buffer Management Flow
-```
-Print Request → Clear Buffer → Print Content → Wait → Next Label
-     ↓            ↓            ↓           ↓        ↓
-  Validate    CLEAR+CLS    TSPL Comm   Monitor   Repeat or
-  Parameters  +HOME        +Content     Progress  Complete
-```
-
-## 🏷️ Single vs Multiple Labels
-
-### Single Label Printing
-
-#### **Flow**
-```
-1. Initialize printer
-2. Send gap detection commands
-3. Clear buffer
-4. Calculate positions
-5. Print QR + text
-6. Wait for completion
-7. Return success
-```
-
-#### **TSPL Commands**
-```tspl
-CLEAR
-SIZE 1488,992
-GAP 40,0
-GAPDETECT ON
-AUTODETECT ON
-CLS
-CLEAR
-CLS
-HOME
+SIZE 100 mm,150 mm            ← LabelPrintConfig.widthMm / heightMm
+GAP 3 mm,0 mm                 ← gapMm / gapOffsetMm   (BLINE m,n when blackMark)
+DENSITY 10                    ← only when density is set
+DIRECTION 0,0                 ← direction (1 = rotated 180°)
 REFERENCE 0,0
-DIRECTION 0
-QRCODE 334,148,H,10,A,0,"QR123456"
-TEXT 334,968,"9",0,1,1,"Sample Label"
-PRINT 1
+CLS                           ← clear the image buffer
+TEXT 40,67,"5",0,1,1,"BM Coach"                       ← brand, top left
+BITMAP 508,36,32,110,0,<3520 bytes>                   ← logo, top right
+BAR 40,160,719,3                                      ← rule
+QRCODE 552,186,M,3,A,0,"BOOKING REFERENCE: BK-1025 | ITEM: BK1025-001 | ..."
+TEXT 40,190,"2",0,1,1,"BOOKING REFERENCE"
+TEXT 40,220,"5",0,1,1,"BK-1025"
+TEXT 40,304,"2",0,1,1,"ITEM"
+TEXT 40,334,"5",0,1,1,"BK1025-001"
+BOX 40,440,759,570,3
+TEXT 56,454,"2",0,1,1,"SENDER"
+TEXT 56,482,"4",0,1,1,"Otapp Agency Limited"
+TEXT 56,526,"3",0,1,1,"Tel: +255 712 345 678"
+BOX 40,570,759,699,3
+TEXT 56,584,"2",0,1,1,"RECEIVER"
+TEXT 56,611,"4",0,1,1,"John Mwakyusa"
+TEXT 56,655,"3",0,1,1,"Tel: +255 765 432 109"
+BOX 40,699,419,811,3   TEXT ... "DESTINATION"  TEXT ... "DAR ES SALAAM"
+BOX 419,699,599,811,3  TEXT ... "WEIGHT"       TEXT ... "5.0 KG"
+BOX 599,699,759,811,3  TEXT ... "PACKAGE"      TEXT ... "1 / 5"
+BOX 40,811,454,904,3   TEXT ... "SOURCE"       TEXT ... "MWANZA"
+BOX 454,811,759,904,3  TEXT ... "DATE"         TEXT ... "2025-10-19"
+BOX 40,904,759,1159,3
+TEXT 56,920,"2",0,1,1,"CARGO NAME"
+TEXT 56,954,"5",0,1,1,"Spare parts (engine)"
+PRINT 1,1                     ← 1 set, config.copies copies
 ```
 
-### Multiple Labels Printing
+`NtbpPlugin.previewCargoLabel(...)` returns exactly this text (with the logo bytes replaced
+by a placeholder).
 
-#### **Flow**
+### Geometry
+
+The layout is drawn on a reference grid of 800 x 1200 dots, which is a 100 x 150 mm label at
+203 dpi (8 dots per mm). Every coordinate is multiplied by `widthDots / 800` and
+`heightDots / 1200`, so other label sizes keep the same proportions.
+
+| Band | Reference y | Content |
+|---|---|---|
+| Header | 36 – 146 | brand name (left, vertically centred), logo (right, box 360 x 110) |
+| Rule | 160 | 3 dot bar |
+| Top block | 186 – 422 | booking reference and item (left), QR code (right, up to 236 dots) |
+| Sender | 440 – 570 | caption, name (font 4), phone (font 3) |
+| Receiver | 570 – 700 | same |
+| Row 1 | 700 – 812 | destination (380 wide), weight (180), package (160) |
+| Row 2 | 812 – 905 | source (415), date (305) |
+| Cargo name | 905 – 1160 | caption, name in the largest font that fits, wrapped |
+| Margin | 1160 – 1200 | blank |
+
+### Fonts
+
+The printer's built-in bitmap fonts are used. `TsplFont.fit()` picks the largest font whose
+rendering of the text fits the cell, and `TsplFont.clip()` truncates text that is too long
+even for the smallest font.
+
+| TSPL font | Glyph size (dots) | Used for |
+|---|---|---|
+| `"2"` | 12 x 20 | captions |
+| `"3"` | 16 x 24 | phone numbers, long cargo names |
+| `"4"` | 24 x 32 | party names, row values, two-line cargo names |
+| `"5"` | 32 x 48 | brand, booking, item, short cargo names |
+
+Text is escaped by `TsplBuilder.escape()`: double quotes become single quotes, line breaks
+become spaces, and characters outside Latin-1 become `?` because the built-in fonts do not
+have them.
+
+### QR code
+
+The QR encodes `CargoLabel.effectiveQrData`: by default `summaryText()`, which joins every
+field with ` | ` (TSPL quoted strings cannot contain line breaks). The symbol version is
+estimated from the byte length and the cell size is chosen so the code fits a 236 dot box,
+never smaller than 3 dots per module so phones can read it.
+
+### Logo
+
+`CargoLogo.fromBytes()` decodes the image once. `toMono(maxWidth, maxHeight)` scales it to
+fit (upscaling at most 2x), converts to 1 bit with a luminance threshold (or dithering) and
+packs it in `BITMAP` row format: `widthBytes` bytes per row, most significant bit first,
+1 = white. `TsplBuilder.bitmap()` emits `BITMAP x,y,widthBytes,height,0,` followed by the raw
+bytes and CRLF.
+
+## 2. Sending
+
+`NtbpPlugin.sendTspl()` Latin-1 encodes the script into a `Uint8List` and calls the
+`sendProtocolCommands` channel method. The typed list crosses the channel as binary data and
+is written to the printer unchanged:
+
+- **Android**: `IDeviceConnection.sendData(bytes)` on a background executor.
+- **iOS**: `XBLEManager.writeCommand(with:writeCallBack:)`; the SDK chunks for BLE.
+
+The call resolves true when the bytes were handed to the transport. It does not wait for the
+paper to come out.
+
+## 3. Series printing
+
+`NtbpPlugin.printCargoLabels(labels, ...)` (and the legacy
+`printMultipleLabelsWithGapDetection`) run this loop:
+
 ```
-1. Initialize printer
-2. Send gap detection commands
-3. For each label:
-   a. Clear buffer
-   b. Calculate positions
-   c. Print QR + text
-   d. Feed to next label
-4. Final cut
-5. Return success/failure
-```
-
-#### **TSPL Commands for Multiple Labels**
-```tspl
-# Initialization
-CLEAR
-SIZE 1488,992
-GAP 40,0
-GAPDETECT ON
-AUTODETECT ON
-CLS
-
-# Label 1
-CLEAR
-CLS
-HOME
-REFERENCE 0,0
-DIRECTION 0
-QRCODE 334,148,H,10,A,0,"QR001"
-TEXT 334,968,"9",0,1,1,"Product A"
-PRINT 1
-FORMFEED
-
-# Label 2
-CLEAR
-CLS
-HOME
-REFERENCE 0,0
-DIRECTION 0
-QRCODE 334,148,H,10,A,0,"QR002"
-TEXT 334,968,"9",0,1,1,"Product B"
-PRINT 1
-
-# Final cut
-CUT
-```
-
-## 🔍 Gap Detection
-
-### How It Works
-- **GAPDETECT ON**: Enables automatic gap detection
-- **AUTODETECT ON**: Enables automatic label detection
-- **GAP command**: Sets expected gap size between labels
-
-### Gap Size Calculation
-```kotlin
-val gapSize = when {
-  labelHeight <= 20 -> convertToDots(dpi, 2.0, "mm")   // 2mm gap
-  labelHeight <= 40 -> convertToDots(dpi, 2.5, "mm")   // 2.5mm gap
-  else -> convertToDots(dpi, 3.0, "mm")                // 3mm gap
-}
-```
-
-## ❌ Error Handling
-
-### Common Errors
-1. **NOT_CONNECTED**: Printer not connected
-2. **PRINTING_ERROR**: TSPL command failure
-3. **TIMEOUT_ERROR**: Operation timeout
-4. **BUFFER_ERROR**: Buffer clearing failure
-
-### Error Recovery
-```kotlin
-try {
-  sendCommands(commands.toByteArray().toList())
-} catch (e: Exception) {
-  result.error("PRINTING_ERROR", "Failed to send commands: ${e.message}", null)
-  return@launch
-}
-```
-
-## ⚡ Performance
-
-### Typical Timings
-- **Buffer Clear**: 200-400ms
-- **Position Calculation**: 1-5ms
-- **TSPL Command Send**: 50-100ms
-- **Print Execution**: 500-2000ms
-- **Paper Feed**: 300-500ms
-
-### Optimization Tips
-1. **Batch commands** instead of sending separately
-2. **Reuse connections** when possible
-3. **Clear buffer** only when necessary
-4. **Use appropriate delays** between operations
-
-## 🐛 Troubleshooting
-
-### Content Bleeding
-- Use aggressive buffer clearing
-- Add delays between labels
-- Check TSPL command sequence
-
-### Misaligned Content
-- Verify label dimensions and DPI
-- Check positioning calculations
-- Ensure proper reference point
-
-### Gap Detection Issues
-- Check label gap size (2-3mm typical)
-- Verify gap detection is enabled
-- Test with different label materials
-
-## 📊 Monitoring
-
-### Debug Logging
-```kotlin
-android.util.Log.d("NTBPPlugin", "Label dimensions: ${width}mm x ${height}mm")
-android.util.Log.d("NTBPPlugin", "Calculated positions: QR($qrX,$qrY), Text($textX,$textY)")
-android.util.Log.d("NTBPPlugin", "TSPL commands: $commands")
+for each label:
+    build job
+    send job
+    wait 200 ms
+    poll ESC ! ? every 300 ms until the printer stops reporting "printing"
+        (up to perLabelTimeout, default 15 s)
+    if the printer reports head open / jam / out of paper / out of ribbon:
+        stop, mark this and the remaining labels as failed
+    if the printer never answers the status query:
+        fall back to a timed delay (600 ms + 900 ms per copy) and continue
 ```
 
-### Connection Status
-```dart
-final status = await _plugin.getConnectionStatus();
-final details = await _plugin.getDetailedConnectionStatus();
-```
+The result is a `PrintBatchResult` with `printed`, `failedIndexes` and `stoppedBy`.
 
----
+What is **not** sent between labels, on purpose:
 
-This document provides the essential information about how the NTBP Plugin handles label printing. For more details, refer to the [API Reference](API_REFERENCE.md) and [Troubleshooting Guide](TROUBLESHOOTING.md). 
+- no `FORMFEED` (the printer already advances to the next gap after `PRINT`; an extra feed
+  ejects a blank label),
+- no `HOME` (feeds to the next gap, also wasting a label),
+- no `CLEAR` (not a TSPL command),
+- no calibration (`GAPDETECT` / `AUTODETECT` feed several labels and belong to roll changes).
+
+## 4. Calibration
+
+`calibrateGap()` sends `GAPDETECT`, `calibrateBlackMark()` sends `BLINEDETECT`,
+`autoCalibrate()` sends `AUTODETECT`. The printer feeds two or three labels through the sensor
+and stores the measured label length and gap. Do it once after loading a roll. The `GAP` value
+in every job must still match the physical gap of the stock (2 to 3 mm on common rolls).
+
+## 5. Status
+
+`queryPrinterStatus()` sends `ESC ! ?` and the printer answers with one status byte:
+
+| Bit | Meaning |
+|---|---|
+| 0x00 | ready |
+| 0x01 | head open |
+| 0x02 | paper jam |
+| 0x04 | out of paper |
+| 0x08 | out of ribbon |
+| 0x10 | paused |
+| 0x20 | printing |
+
+`PrinterStatus` decodes it; `code` is -1 when the printer did not answer and -2 when there is
+no connection.
+
+## 6. The legacy three-line label
+
+`printSingleLabelWithGapDetection` still produces the 2.x layout (QR centred on top, up to
+three text lines aligned to its left edge). The arithmetic is a direct port of the 2.0.0
+Kotlin code into `ThreeLineQrLayout`, so output is unchanged on Android and now identical on
+iOS. The only differences from 2.x are the removed non-TSPL commands and the removed per-print
+calibration.
+
+## 7. Timings (XP-420B over Bluetooth)
+
+| Step | Typical |
+|---|---|
+| Build job in Dart | under 5 ms (logo already decoded) |
+| Transfer, Android SPP, 6 KB job with logo | under 200 ms |
+| Transfer, iOS BLE, same job | 1 to 3 s |
+| Print one 100 x 150 mm label | about 1.5 s |
+| Status poll round trip | 50 to 200 ms |
+| Calibration | 3 to 6 s, feeds 2 to 3 labels |

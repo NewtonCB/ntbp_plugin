@@ -1,532 +1,211 @@
-# NTBP Plugin - Troubleshooting Guide
+# Troubleshooting (3.x)
 
-## 🐛 Common Issues and Solutions
-
-This guide covers the most common issues you may encounter when using the NTBP Plugin and provides step-by-step solutions.
-
-## 📋 Table of Contents
-
-1. [Installation Issues](#installation-issues)
-2. [Bluetooth Connection Problems](#bluetooth-connection-problems)
-3. [Printing Issues](#printing-issues)
-4. [Permission Problems](#permission-problems)
-5. [Performance Issues](#performance-issues)
-6. [Debug Information](#debug-information)
-7. [Getting Help](#getting-help)
-
-## 🔧 Installation Issues
-
-### Issue: Plugin Not Found
-```
-Error: Could not find package: ntbp_plugin
-```
-
-**Solutions:**
-1. **Run dependency installation:**
-   ```bash
-   flutter pub get
-   ```
-
-2. **Check pubspec.yaml:**
-   ```yaml
-   dependencies:
-     ntbp_plugin: ^1.0.0
-   ```
-
-3. **Restart your IDE/editor**
-
-4. **Clean and rebuild:**
-   ```bash
-   flutter clean
-   flutter pub get
-   ```
-
-### Issue: Platform Channel Errors
-```
-Error: MissingPluginException: No implementation found for method X
-```
-
-**Solutions:**
-1. **Ensure platform setup is complete:**
-   - Android: Check `AndroidManifest.xml` permissions
-   - iOS: Check `Info.plist` and capabilities
-
-2. **Rebuild the project:**
-   ```bash
-   flutter clean
-   flutter pub get
-   flutter run
-   ```
-
-3. **Check platform-specific files exist:**
-   - Android: `android/src/main/kotlin/.../NtbpPlugin.kt`
-   - iOS: `ios/Classes/NtbpPlugin.swift`
-
-## 🔌 Bluetooth Connection Problems
-
-### Issue: Bluetooth Not Available
-```
-Error: Bluetooth not available
-```
-
-**Solutions:**
-1. **Check device Bluetooth:**
-   - Enable Bluetooth in device settings
-   - Ensure Bluetooth is not in airplane mode
-
-2. **Check app permissions:**
-   - Grant Bluetooth permissions in app settings
-   - Request permissions at runtime
-
-3. **Verify device support:**
-   - Ensure device supports Bluetooth Classic (SPP)
-   - Check minimum API level (Android 5.0+)
-
-### Issue: No Devices Found
-```
-Error: No devices found during scan
-```
-
-**Solutions:**
-1. **Check printer state:**
-   - Ensure printer is in pairing mode
-   - Check if printer is already connected to another device
-
-2. **Verify Bluetooth visibility:**
-   - Make printer discoverable
-   - Check printer Bluetooth settings
-
-3. **Scan duration:**
-   - Wait 10-15 seconds for scan completion
-   - Try multiple scan attempts
-
-4. **Distance and interference:**
-   - Ensure printer is within 10 meters
-   - Reduce Bluetooth interference
-
-### Issue: Connection Failed
-```
-Error: Connection failed
-```
-
-**Solutions:**
-1. **Check device pairing:**
-   - Ensure device is paired first
-   - Try pairing manually in Bluetooth settings
-
-2. **Verify printer compatibility:**
-   - Check if printer supports SPP profile
-   - Ensure printer is not connected to another device
-
-3. **Connection retry:**
-   - Implement retry logic in your app
-   - Wait between connection attempts
-
-4. **Check printer status:**
-   - Ensure printer has power
-   - Check for paper jams or errors
-
-### Issue: Connection Drops
-```
-Error: Connection lost during printing
-```
-
-**Solutions:**
-1. **Implement reconnection logic:**
-   ```dart
-   Future<void> maintainConnection() async {
-     Timer.periodic(Duration(seconds: 30), (timer) async {
-       final status = await _plugin.getConnectionStatus();
-       if (status != 'CONNECTED') {
-         await _reconnect();
-       }
-     });
-   }
-   ```
-
-2. **Check connection stability:**
-   - Reduce distance between device and printer
-   - Check for Bluetooth interference
-
-3. **Power management:**
-   - Disable battery optimization for your app
-   - Keep device screen on during printing
-
-## 🖨️ Printing Issues
-
-### Issue: Not Connected Error
-```
-Error: Not connected to printer
-```
-
-**Solutions:**
-1. **Check connection status:**
-   ```dart
-   final status = await _plugin.getConnectionStatus();
-   if (status != 'CONNECTED') {
-     // Reconnect or show error
-   }
-   ```
-
-2. **Verify connection before printing:**
-   ```dart
-   Future<bool> printLabel() async {
-     if (!await _isConnected()) {
-       await _connectToPrinter();
-     }
-     // Proceed with printing
-   }
-   ```
-
-3. **Check output stream:**
-   - Ensure `outputStream` is initialized
-   - Verify socket connection is active
-
-### Issue: Content Bleeding Between Labels
-```
-Problem: Previous label content appears on new labels
-```
-
-**Solutions:**
-1. **Clear buffer before printing:**
-   ```dart
-   await _plugin.clearBuffer();
-   // Wait for buffer clearing
-   await Future.delayed(Duration(milliseconds: 200));
-   ```
-
-2. **Use aggressive buffer clearing:**
-   - The plugin now implements multiple clearing strategies
-   - `CLEAR` + `CLS` + `HOME` commands
-
-3. **Add delays between labels:**
-   ```dart
-   // For multiple labels
-   await Future.delayed(Duration(milliseconds: 500));
-   ```
-
-4. **Check TSPL commands:**
-   - Ensure proper `CLS` command usage
-   - Verify command sequence order
-
-### Issue: Label Positioning Problems
-```
-Problem: Content not centered or positioned correctly
-```
-
-**Solutions:**
-1. **Check label dimensions:**
-   - Verify width and height parameters
-   - Ensure unit consistency (mm, inch, dot)
-
-2. **Use smart positioning:**
-   ```dart
-   await _plugin.printSingleLabelWithGapDetection(
-     // ... parameters
-   );
-   ```
-
-3. **Verify DPI setting:**
-   - Match printer's actual DPI (usually 203)
-   - Check label size calculations
-
-### Issue: Gap Detection Not Working
-```
-Problem: Printer doesn't detect label boundaries
-```
-
-**Solutions:**
-1. **Check label type:**
-   - Ensure labels have proper gaps
-   - Verify gap size (typically 2-3mm)
-
-2. **Use proper TSPL commands:**
-   ```dart
-   // Gap detection commands are automatically sent
-   await _plugin.printSingleLabelWithGapDetection(...);
-   ```
-
-3. **Check printer settings:**
-   - Verify gap detection is enabled
-   - Check sensor alignment
-
-### Issue: Print Quality Problems
-```
-Problem: Poor print quality or missing content
-```
-
-**Solutions:**
-1. **Check print density:**
-   - Verify `DENSITY` setting (default: 12)
-   - Adjust based on label material
-
-2. **Check content size:**
-   - Ensure QR code fits within label
-   - Verify text size is appropriate
-
-3. **Check printer hardware:**
-   - Clean print head
-   - Check label material compatibility
-
-## 🔐 Permission Problems
-
-### Issue: Bluetooth Permissions Denied
-```
-Error: Bluetooth permissions denied
-```
-
-**Solutions:**
-1. **Check AndroidManifest.xml:**
-   ```xml
-   <uses-permission android:name="android.permission.BLUETOOTH" />
-   <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
-   <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-   <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
-   <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-   <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-   ```
-
-2. **Request permissions at runtime:**
-   ```dart
-   final hasPermissions = await _plugin.requestBluetoothPermissions();
-   if (!hasPermissions) {
-     // Show permission request dialog
-     // Guide user to app settings
-   }
-   ```
-
-3. **Check app settings:**
-   - Go to device Settings → Apps → Your App → Permissions
-   - Enable Bluetooth and Location permissions
-
-### Issue: Location Permission Required
-```
-Error: Location permission required for Bluetooth scanning
-```
-
-**Solutions:**
-1. **Request location permission:**
-   ```dart
-   await _plugin.requestBluetoothPermissions();
-   ```
-
-2. **Explain to users:**
-   - Location permission is required for Bluetooth scanning
-   - This is an Android requirement, not app-specific
-
-3. **Handle permission denial:**
-   ```dart
-   if (!await _plugin.requestBluetoothPermissions()) {
-     // Show explanation dialog
-     // Guide user to settings
-   }
-   ```
-
-## ⚡ Performance Issues
-
-### Issue: Slow Connection
-```
-Problem: Connection takes too long
-```
-
-**Solutions:**
-1. **Implement connection timeout:**
-   ```dart
-   try {
-     await _plugin.connectToDevice(device).timeout(
-       Duration(seconds: 30),
-       onTimeout: () => throw TimeoutException('Connection timeout'),
-     );
-   } catch (e) {
-     // Handle timeout
-   }
-   ```
-
-2. **Use connection strategies:**
-   - The plugin implements multiple connection strategies
-   - Automatic fallback to alternative methods
-
-3. **Optimize scan duration:**
-   - Limit scan time for better performance
-   - Cache discovered devices
-
-### Issue: Memory Issues
-```
-Problem: App crashes or memory warnings
-```
-
-**Solutions:**
-1. **Dispose resources properly:**
-   ```dart
-   @override
-   void dispose() {
-     _plugin.disconnect();
-     super.dispose();
-   }
-   ```
-
-2. **Limit concurrent operations:**
-   - Don't run multiple scans simultaneously
-   - Cancel previous operations before starting new ones
-
-3. **Monitor memory usage:**
-   - Use Flutter DevTools to monitor memory
-   - Check for memory leaks
-
-## 🐛 Debug Information
-
-### Enable Debug Logging
+Work through the section that matches the symptom. Each entry says what to check and the
+exact fix. The first tool in every case is the printer status:
 
 ```dart
-// Add debug prints to track operations
-class DebugPrinterService {
-  final NtbpPlugin _plugin = NtbpPlugin();
-  
-  Future<void> connectWithDebug(BluetoothDevice device) async {
-    print('🔌 Attempting connection to ${device.name}');
-    
-    try {
-      await _plugin.connectToDevice(device);
-      print('✅ Connection successful');
-      
-      final status = await _plugin.getConnectionStatus();
-      print('📊 Connection status: $status');
-      
-    } catch (e) {
-      print('❌ Connection failed: $e');
-      rethrow;
-    }
-  }
-}
+final s = await NtbpPlugin.queryPrinterStatus();
+print('${s.code} ${s.description}');
 ```
 
-### Check Connection Details
+## Table of contents
 
-```dart
-// Get detailed connection information
-Future<void> debugConnection() async {
-  try {
-    final details = await _plugin.getDetailedConnectionStatus();
-    print('🔍 Connection Details:');
-    print('  Status: ${details["status"]}');
-    print('  Device: ${details["deviceName"]}');
-    print('  Socket: ${details["socketConnected"]}');
-    print('  Stream: ${details["outputStreamAvailable"]}');
-    print('  Error: ${details["lastError"]}');
-  } catch (e) {
-    print('❌ Debug info failed: $e');
-  }
-}
-```
-
-### Monitor Printer Status
-
-```dart
-// Check printer status before operations
-Future<void> checkPrinterHealth() async {
-  try {
-    final status = await _plugin.getPrinterStatus();
-    print('📊 Printer Status: $status');
-    
-    // Check connection
-    final connectionStatus = await _plugin.getConnectionStatus();
-    print('🔌 Connection: $connectionStatus');
-    
-  } catch (e) {
-    print('❌ Health check failed: $e');
-  }
-}
-```
-
-## 🆘 Getting Help
-
-### Before Asking for Help
-
-1. **Check this troubleshooting guide**
-2. **Verify your setup:**
-   - Flutter version: `flutter --version`
-   - Plugin version in `pubspec.yaml`
-   - Platform-specific configuration
-
-3. **Collect debug information:**
-   - Error messages and stack traces
-   - Device information (Android/iOS version)
-   - Printer model and specifications
-
-4. **Test with example app:**
-   - Run the provided example app
-   - Verify if issue is app-specific or plugin-wide
-
-### Provide Information When Reporting Issues
-
-```dart
-// Include this information in bug reports
-class BugReportInfo {
-  static Map<String, String> collect() {
-    return {
-      'flutter_version': '${Flutter.version}',
-      'dart_version': '${Dart.version}',
-      'platform': '${Platform.operatingSystem}',
-      'platform_version': '${Platform.operatingSystemVersion}',
-      'plugin_version': '1.0.0',
-      'device_model': '${Platform.operatingSystem == 'android' ? 'Android Device' : 'iOS Device'}',
-    };
-  }
-}
-```
-
-### Contact Channels
-
-1. **GitHub Issues**: [Create an issue](https://github.com/yourusername/ntbp_plugin/issues)
-2. **GitHub Discussions**: [Join discussions](https://github.com/yourusername/ntbp_plugin/discussions)
-3. **Documentation**: [Check docs](https://github.com/yourusername/ntbp_plugin/docs)
-
-### Issue Template
-
-When creating an issue, use this template:
-
-```markdown
-## Bug Report
-
-### Environment
-- Flutter version: [e.g., 3.19.0]
-- Dart version: [e.g., 3.3.0]
-- Platform: [Android/iOS]
-- Platform version: [e.g., Android 13, iOS 16]
-
-### Issue Description
-[Describe the issue in detail]
-
-### Steps to Reproduce
-1. [Step 1]
-2. [Step 2]
-3. [Step 3]
-
-### Expected Behavior
-[What should happen]
-
-### Actual Behavior
-[What actually happens]
-
-### Error Messages
-```
-[Paste error messages here]
-```
-
-### Debug Information
-[Include debug logs and connection details]
-
-### Additional Context
-[Any other relevant information]
-```
-
-## 📚 Additional Resources
-
-- [API Reference](API_REFERENCE.md)
-- [Integration Guide](INTEGRATION_GUIDE.md)
-- [Development Guide](DEVELOPMENT.md)
-- [Example App](example/lib/main.dart)
+1. [Installation and build](#1-installation-and-build)
+2. [Permissions](#2-permissions)
+3. [Finding and connecting to the printer](#3-finding-and-connecting-to-the-printer)
+4. [Nothing prints](#4-nothing-prints)
+5. [Wrong output](#5-wrong-output)
+6. [Series printing](#6-series-printing)
+7. [Debug information](#7-debug-information)
+8. [Reporting a bug](#8-reporting-a-bug)
 
 ---
 
-This troubleshooting guide should help you resolve most common issues with the NTBP Plugin. If you continue to experience problems, please create a detailed issue report with the information requested above. 
+## 1. Installation and build
+
+**Android: `uses-sdk:minSdkVersion 19 cannot be smaller than version 21`**
+The Xprinter SDK needs API 21. Set `minSdk = 21` in `android/app/build.gradle`.
+
+**Android: `Direct local .aar file dependencies are not supported when building an AAR`**
+You copied `printer-lib-3.5.8.aar` into your own project. Remove that `implementation
+files(...)` line; the plugin already serves the aar from its internal Maven repository.
+
+**Android: `Could not find net.posprinter:printer-lib:3.5.8`**
+The plugin registers its repository on every project of the build. If your
+`settings.gradle` uses `dependencyResolutionManagement { repositoriesMode =
+FAIL_ON_PROJECT_REPOS }`, either switch to `PREFER_SETTINGS` or add the plugin's repository
+there:
+
+```kotlin
+maven { url = uri("<path to pub cache>/ntbp_plugin-3.0.0/android/libs/repo") }
+```
+
+**iOS: `'ntbp_plugin/ntbp_plugin.h' file not found`**
+Stale pod install. Run `cd ios && pod install`, then build again.
+
+**iOS simulator: linker errors or `does not support arm64`**
+The vendor library has no Apple-silicon simulator slice. Test on a real iPhone, or run the
+simulator under Rosetta.
+
+**iOS: `No profiles for '...' were found` / `No Accounts`**
+Sign into Xcode (Settings → Accounts) with the Apple ID of your team, open
+`ios/Runner.xcworkspace`, enable "Automatically manage signing" on the Runner target.
+
+---
+
+## 2. Permissions
+
+**Android: scan fails with `PERMISSION_DENIED`**
+Call `await NtbpPlugin().requestBluetoothPermissions()` and wait for `true` before scanning.
+The dialog is "Nearby devices" on Android 12+ and "Location" on Android 11 and below.
+
+**Android: the permission dialog does not appear**
+- `requestBluetoothPermissions()` needs a foreground Activity. Calling it from a background
+  isolate or before the first frame returns `NO_ACTIVITY`; call it from a button handler or in
+  `WidgetsBinding.instance.addPostFrameCallback`.
+- The user previously chose "Don't ask again". Android then never shows the dialog. Send the
+  user to the app's Settings page (`permission_handler`'s `openAppSettings()` works for this).
+
+**Android 11 and below: permission granted but discovery finds nothing**
+Location services must be switched on in the phone's settings for classic Bluetooth
+discovery to return results. Bonded printers are still listed.
+
+**iOS: Bluetooth permission always "denied" when read with permission_handler**
+`permission_handler` compiles the Bluetooth permission out unless the Podfile sets
+`PERMISSION_BLUETOOTH=1` in `GCC_PREPROCESSOR_DEFINITIONS` (see the integration guide). The
+plugin itself does not need this; only your permission_handler calls do.
+
+**iOS: the app never asked for Bluetooth**
+Make sure `NSBluetoothAlwaysUsageDescription` is in `Info.plist`. Without it iOS silently
+blocks Bluetooth and may terminate the app on first use.
+
+---
+
+## 3. Finding and connecting to the printer
+
+**The printer is not in the scan results (Android)**
+- Pair it once in the phone's Bluetooth settings; bonded devices are always listed.
+- The XP-420B advertises classic Bluetooth. BLE-only entries are skipped on Android on
+  purpose because the SDK connects over SPP.
+- Only one phone can hold the SPP connection; disconnect it from any other phone or PC.
+
+**The printer is not in the scan results (iOS)**
+- iOS uses BLE. Make sure the printer is on and not connected to another iOS device.
+- Move closer; the scan window is 10 seconds.
+- Bluetooth must be on in Control Centre and allowed for the app in Settings.
+
+**`DEVICE_NOT_FOUND` on connect**
+The address was not in the most recent scan. Scan again, then connect. Addresses are stable
+(MAC on Android, peripheral identifier on iOS), so storing them is fine, but a scan must
+precede the connect.
+
+**`CONNECTION_ERROR` / `CONNECTION_TIMEOUT`**
+- Printer off, asleep, or already connected elsewhere.
+- Android 12+: `BLUETOOTH_CONNECT` not granted (the plugin now reports `PERMISSION_DENIED`
+  for this before dialing).
+- Power-cycle the printer and retry; the SDK gives up after 20 seconds.
+
+**Connection drops after a while**
+The example app re-checks the native connection when it returns to the foreground
+(`plugin.isConnected()`). Do the same, and reconnect by scanning and matching the stored
+address.
+
+---
+
+## 4. Nothing prints
+
+1. **Ask the printer.** `queryPrinterStatus()` → "Out of paper", "Head opened", "Paper jam"
+   or "Paused" tells you what to fix. "No response" means the link is up but the printer is
+   not answering; power-cycle it.
+2. **Check the return value.** `printCargoLabel` returns false, or throws `NOT_CONNECTED`,
+   `SEND_ERROR`, `SEND_TIMEOUT` or `EMPTY_PAYLOAD`, when the bytes never left the phone.
+3. **Check the media size.** If `LabelPrintConfig` says 100 x 150 mm but the roll is 100 x
+   100 mm, the printer may feed past the gap looking for the end of the label and print
+   nothing visible. Match `widthMm` / `heightMm` to the stock.
+4. **Calibrate.** After a roll change run `calibrateGap()` once.
+5. **Look at what was sent.** `NtbpPlugin.previewCargoLabel(label, config: c, logo: l)`
+   returns the TSPL; `SIZE` and `GAP` should match the paper, and the `PRINT` line must be
+   last.
+
+---
+
+## 5. Wrong output
+
+| Symptom | Fix |
+|---|---|
+| Labels print upside down | `LabelPrintConfig(direction: 1)` |
+| Content shifted down, or a blank label between prints | Run `calibrateGap()`; set `gapMm` to the real gap (2 to 3 mm) |
+| Content cut off at the bottom | `heightMm` larger than the real label; fix the config |
+| Print too light | Raise `density` (0 to 15). 10 to 12 for most stock |
+| Print too dark, smeared | Lower `density`; lower `speed` (for example 3) |
+| Logo prints as a black block | Logo has a dark or transparent background. Transparent areas are flattened on white; a dark background needs a different image or a higher `threshold` |
+| Logo prints washed out or missing lines | Lower `threshold` (default 170), or use `dither: true` |
+| Phone cannot scan the QR | The summary is long. Shorten sender and receiver text, or set `qrContent: CargoQrContent.itemReference` for that label |
+| `?` printed instead of a character | The built-in fonts cover Latin-1 only. Use ASCII, or render the text as part of the logo image |
+| Quotes missing from text | Double quotes are converted to single quotes; TSPL has no escape for them |
+| Text truncated | The field is too long for the cell even in the smallest font. Shorten it or override the caption to free space |
+
+---
+
+## 6. Series printing
+
+**The batch stopped early**
+`PrintBatchResult.stoppedBy` holds the printer status that stopped it (out of paper, head
+open, jam). Fix the printer and print `failedIndexes` again.
+
+**Every label is reported printed but some are missing on paper**
+The printer never answered the status query, so the plugin fell back to timing. Check that
+the printer answers `queryPrinterStatus()`; if it never does, increase the fallback by
+printing fewer copies per job, or set `waitForPrinter: false` and pace the batch yourself.
+
+**A blank label between each printed label**
+You are sending `FORMFEED` or `HOME` yourself between jobs. The plugin does not; remove them.
+
+---
+
+## 7. Debug information
+
+```dart
+await plugin.getDetailedConnectionStatus();
+// {connectionState, socketConnected, socketAddress, socketName, lastError, transport}
+
+NtbpPlugin.previewCargoLabel(label, config: config, logo: logo); // the TSPL
+```
+
+Android logs are tagged `NTBPPlugin`:
+
+```bash
+adb logcat -s NTBPPlugin
+```
+
+iOS logs appear in the Xcode console. The vendor SDK prints its own BLE write and status
+messages there too.
+
+Error codes raised as `PlatformException`:
+
+| Code | Where | Meaning |
+|---|---|---|
+| `PERMISSION_DENIED` | scan, connect | A runtime permission is missing |
+| `NO_ACTIVITY` | requestBluetoothPermissions | No foreground Activity to show the dialog |
+| `BLUETOOTH_NOT_AVAILABLE` | scan, connect | Bluetooth off or unsupported |
+| `DEVICE_NOT_FOUND` | connect | Address not in the last scan |
+| `CONNECTION_ERROR`, `CONNECTION_TIMEOUT`, `CONNECTION_CANCELLED` | connect | Could not connect |
+| `NOT_CONNECTED` | send, status | No open connection |
+| `EMPTY_PAYLOAD` | send | Zero bytes arrived at the native side |
+| `SEND_ERROR`, `SEND_TIMEOUT` | send | Transport failed |
+
+---
+
+## 8. Reporting a bug
+
+Include:
+
+- Printer model and firmware (the XP-420B prints a self-test page when powered on while
+  holding the feed button).
+- Phone model, OS version, plugin version.
+- The TSPL from `previewCargoLabel` (attach as text).
+- `queryPrinterStatus()` output before and after the failed print.
+- Android: `adb logcat -s NTBPPlugin`. iOS: the Xcode console.
+- A photo of the label if the output is wrong.
+
+Open the issue at https://github.com/NewtonCB/ntbp_plugin/issues.
